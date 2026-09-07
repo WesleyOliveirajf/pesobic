@@ -1,0 +1,150 @@
+import { db, patchSettings } from '../db/db'
+import type {
+  Injection,
+  NutritionDay,
+  Settings,
+  SymptomLog,
+  WeighIn,
+} from '../db/types'
+import { todayISO } from './format'
+import { triggerDownload } from './ics'
+
+const FORMAT = 'pesobic-backup'
+const VERSION = 1
+
+interface BackupFile {
+  format: typeof FORMAT
+  version: number
+  exportedAt: string
+  settings: Settings | null
+  injections: Injection[]
+  weighIns: WeighIn[]
+  symptoms: SymptomLog[]
+  nutrition: NutritionDay[]
+}
+
+export async function exportBackup(): Promise<void> {
+  const [settings, injections, weighIns, symptoms, nutrition] = await Promise.all([
+    db.settings.get('singleton'),
+    db.injections.toArray(),
+    db.weighIns.toArray(),
+    db.symptoms.toArray(),
+    db.nutrition.toArray(),
+  ])
+  const data: BackupFile = {
+    format: FORMAT,
+    version: VERSION,
+    exportedAt: new Date().toISOString(),
+    settings: settings ?? null,
+    injections,
+    weighIns,
+    symptoms,
+    nutrition,
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  triggerDownload(blob, `pesobic-backup-${todayISO()}.json`)
+  await patchSettings({ lastExportAt: Date.now() })
+}
+
+export async function importBackup(file: File): Promise<{ counts: Record<string, number> }> {
+  const text = await file.text()
+  const data = JSON.parse(text) as Partial<BackupFile>
+  if (data.format !== FORMAT) {
+    throw new Error('Arquivo nao e um backup do Pesobic.')
+  }
+
+  const injections = data.injections ?? []
+  const weighIns = data.weighIns ?? []
+  const symptoms = data.symptoms ?? []
+  const nutrition = data.nutrition ?? []
+
+  await db.transaction(
+    'rw',
+    [db.settings, db.injections, db.weighIns, db.symptoms, db.nutrition],
+    async () => {
+      await Promise.all([
+        db.injections.clear(),
+        db.weighIns.clear(),
+        db.symptoms.clear(),
+        db.nutrition.clear(),
+      ])
+      if (data.settings) await db.settings.put({ ...data.settings, id: 'singleton' })
+      await db.injections.bulkAdd(injections.map(stripId))
+      await db.weighIns.bulkAdd(weighIns.map(stripId))
+      await db.symptoms.bulkAdd(symptoms.map(stripId))
+      await db.nutrition.bulkAdd(nutrition.map(stripId))
+    },
+  )
+
+  return {
+    counts: {
+      injections: injections.length,
+      weighIns: weighIns.length,
+      symptoms: symptoms.length,
+      nutrition: nutrition.length,
+    },
+  }
+}
+
+function stripId<T extends { id?: number }>(row: T): Omit<T, 'id'> {
+  const { id: _id, ...rest } = row
+  return rest
+}
+
+// --- Fotos: export/import separado (base64), para nao inchar o backup principal ---
+
+interface PhotosFile {
+  format: 'pesobic-fotos'
+  version: number
+  exportedAt: string
+  photos: { date: string; at: number; note?: string; dataUrl: string }[]
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(r.result as string)
+    r.onerror = () => reject(r.error)
+    r.readAsDataURL(blob)
+  })
+}
+
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const res = await fetch(dataUrl)
+  return res.blob()
+}
+
+export async function exportPhotos(): Promise<number> {
+  const rows = await db.photos.orderBy('at').toArray()
+  const photos = await Promise.all(
+    rows.map(async (p) => ({
+      date: p.date,
+      at: p.at,
+      note: p.note,
+      dataUrl: await blobToDataUrl(p.blob),
+    })),
+  )
+  const data: PhotosFile = {
+    format: 'pesobic-fotos',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    photos,
+  }
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+  triggerDownload(blob, `pesobic-fotos-${todayISO()}.json`)
+  return rows.length
+}
+
+export async function importPhotos(file: File): Promise<number> {
+  const data = JSON.parse(await file.text()) as Partial<PhotosFile>
+  if (data.format !== 'pesobic-fotos' || !data.photos) {
+    throw new Error('Arquivo nao e um export de fotos do Pesobic.')
+  }
+  let added = 0
+  for (const p of data.photos) {
+    const blob = await dataUrlToBlob(p.dataUrl)
+    await db.photos.add({ date: p.date, at: p.at, note: p.note, blob })
+    added += 1
+  }
+  return added
+}
