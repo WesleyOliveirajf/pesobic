@@ -15,10 +15,10 @@ import {
 import { currentPhase, expectedPhaseIndex } from '../lib/titration'
 
 export function Home({ settings, onGo }: { settings: Settings; onGo: (tab: string) => void }) {
-  const injections = useInjections() ?? []
-  const weighIns = useWeighIns() ?? []
-  const nutrition = useNutrition() ?? []
-  const symptoms = useSymptoms() ?? []
+  const [injections] = useInjections()
+  const [weighIns] = useWeighIns()
+  const [nutrition] = useNutrition()
+  const [symptoms] = useSymptoms()
 
   const nd = nextDose(injections, settings)
   const phase = currentPhase(settings)

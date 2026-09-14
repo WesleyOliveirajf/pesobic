@@ -16,8 +16,8 @@ export class PesobicDB extends Dexie {
   symptoms!: Table<SymptomLog, number>
   nutrition!: Table<NutritionDay, number>
 
-  constructor() {
-    super('pesobic')
+  constructor(databaseName = 'pesobic:sem-usuario') {
+    super(databaseName)
     this.version(1).stores({
       settings: 'id',
       injections: '++id, at, status',
@@ -29,7 +29,17 @@ export class PesobicDB extends Dexie {
   }
 }
 
-export const db = new PesobicDB()
+export let db = new PesobicDB()
+
+let activeUserId: string | null = null
+
+/** Mantem os dados locais separados por usuario sem remover bancos anteriores. */
+export function activateUserDatabase(userId: string): void {
+  if (activeUserId === userId) return
+  db.close()
+  db = new PesobicDB(`pesobic:${userId}`)
+  activeUserId = userId
+}
 
 export const SETTINGS_ID = 'singleton' as const
 

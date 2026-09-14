@@ -56,7 +56,7 @@ export type InjectionSite =
 export type InjectionStatus = 'aplicada' | 'pulada'
 
 export interface Injection {
-  id?: number
+  id?: string
   at: number // timestamp da aplicacao (ou do registro, se pulada)
   medication: MedicationKey
   doseMg: number
@@ -66,7 +66,7 @@ export interface Injection {
 }
 
 export interface WeighIn {
-  id?: number
+  id?: string
   date: string // yyyy-mm-dd
   at: number
   weightKg: number
@@ -103,7 +103,7 @@ export type SymptomKey =
 export type Severity = 0 | 1 | 2 | 3
 
 export interface SymptomLog {
-  id?: number
+  id?: string
   at: number
   symptom: SymptomKey
   severity: Severity
@@ -111,7 +111,7 @@ export interface SymptomLog {
 }
 
 export interface NutritionDay {
-  id?: number
+  id?: string
   date: string // yyyy-mm-dd (chave unica)
   proteinG: number
   waterMl: number

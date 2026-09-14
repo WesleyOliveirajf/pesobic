@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
-import { db, patchSettings } from '../db/db'
+import { patchSettings } from '../db/db'
+import * as repo from '../lib/repo'
+import { useAuthProfile } from '../lib/auth-context'
 import type { Injection, InjectionSite, MedicationKey, Settings, TitrationPhase } from '../db/types'
 import {
   Btn,
@@ -32,7 +34,7 @@ import {
 } from '../lib/titration'
 
 export function Injections({ settings }: { settings: Settings }) {
-  const injections = useInjections() ?? []
+  const [injections, reloadInjections] = useInjections()
   const [showAdd, setShowAdd] = useState<null | 'aplicada' | 'pulada'>(null)
   const [editPhases, setEditPhases] = useState(false)
   const [editRow, setEditRow] = useState<Injection | null>(null)
@@ -173,12 +175,15 @@ export function Injections({ settings }: { settings: Settings }) {
           status={showAdd}
           suggestedSite={suggestedSite}
           onClose={() => setShowAdd(null)}
+          onSaved={reloadInjections}
         />
       )}
       {editPhases && (
         <EditPhasesModal settings={settings} onClose={() => setEditPhases(false)} />
       )}
-      {editRow && <EditInjectionModal row={editRow} onClose={() => setEditRow(null)} />}
+      {editRow && (
+        <EditInjectionModal row={editRow} onClose={() => setEditRow(null)} onSaved={reloadInjections} />
+      )}
     </div>
   )
 }
@@ -188,23 +193,28 @@ function AddInjectionModal({
   status,
   suggestedSite,
   onClose,
+  onSaved,
 }: {
   settings: Settings
   status: 'aplicada' | 'pulada'
   suggestedSite: InjectionSite
   onClose: () => void
+  onSaved: () => Promise<void>
 }) {
+  const profile = useAuthProfile()
   const phase = currentPhase(settings)
-  const [when, setWhen] = useState(tsToLocalInput(Date.now()))
+  const [when, setWhen] = useState(() => tsToLocalInput(Date.now()))
   const [doseMg, setDoseMg] = useState<number | null>(phase?.doseMg ?? 0)
   const [site, setSite] = useState<InjectionSite>(suggestedSite)
   const [med, setMed] = useState<MedicationKey>(settings.medication)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
 
   async function save() {
     setBusy(true)
-    const row: Injection = {
+    setErr(null)
+    const row: Omit<Injection, 'id'> = {
       at: localInputToTs(when),
       medication: med,
       doseMg: doseMg ?? 0,
@@ -212,8 +222,14 @@ function AddInjectionModal({
       status,
       note: note.trim() || undefined,
     }
-    await db.injections.add(row)
-    onClose()
+    try {
+      await repo.addInjection(profile.id, row)
+      await onSaved()
+      onClose()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
+      setBusy(false)
+    }
   }
 
   return (
@@ -248,6 +264,7 @@ function AddInjectionModal({
       <Field label="Observacao">
         <TextInput value={note} onChange={(e) => setNote(e.target.value)} placeholder="opcional" />
       </Field>
+      {err && <p className="error-box">{err}</p>}
       <Btn variant="primary" block disabled={busy} onClick={save}>
         Salvar
       </Btn>
@@ -255,22 +272,37 @@ function AddInjectionModal({
   )
 }
 
-function EditInjectionModal({ row, onClose }: { row: Injection; onClose: () => void }) {
+function EditInjectionModal({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: Injection
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
   const [when, setWhen] = useState(tsToLocalInput(row.at))
   const [doseMg, setDoseMg] = useState<number | null>(row.doseMg)
   const [site, setSite] = useState<InjectionSite>(row.site)
   const [status, setStatus] = useState(row.status)
   const [note, setNote] = useState(row.note ?? '')
+  const [err, setErr] = useState<string | null>(null)
 
   async function save() {
-    await db.injections.update(row.id!, {
-      at: localInputToTs(when),
-      doseMg: doseMg ?? 0,
-      site,
-      status,
-      note: note.trim() || undefined,
-    })
-    onClose()
+    setErr(null)
+    try {
+      await repo.updateInjection(row.id!, {
+        at: localInputToTs(when),
+        doseMg: doseMg ?? 0,
+        site,
+        status,
+        note: note.trim() || undefined,
+      })
+      await onSaved()
+      onClose()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
+    }
   }
 
   return (
@@ -301,10 +333,12 @@ function EditInjectionModal({ row, onClose }: { row: Injection; onClose: () => v
       <Field label="Observacao">
         <TextInput value={note} onChange={(e) => setNote(e.target.value)} />
       </Field>
+      {err && <p className="error-box">{err}</p>}
       <div className="btn-row">
         <ConfirmButton
           onConfirm={async () => {
-            await db.injections.delete(row.id!)
+            await repo.deleteInjection(row.id!)
+            await onSaved()
             onClose()
           }}
         >

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { patchSettings, wipeAll } from '../db/db'
+import * as repo from '../lib/repo'
+import { useAuthProfile } from '../lib/auth-context'
 import type { MedicationKey, Settings } from '../db/types'
 import {
   Btn,
@@ -18,6 +20,7 @@ import { fmtDateTime, todayISO } from '../lib/format'
 const WEEKDAYS = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado']
 
 export function SettingsScreen({ settings }: { settings: Settings }) {
+  const profile = useAuthProfile()
   const [f, setF] = useState({
     heightCm: settings.heightCm as number | null,
     startWeightKg: settings.startWeightKg as number | null,
@@ -186,8 +189,8 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
 
       <Card title="Backup dos dados">
         <p className="muted-small">
-          Tudo fica so neste aparelho. Exporte com frequencia — se perder o iPhone, o backup e a unica
-          copia.
+          Aplicacoes, pesagens, sintomas e nutricao ficam salvos na sua conta (sincronizados). Exporte
+          tambem um backup local por seguranca.
           {settings.lastExportAt
             ? ` Ultimo export: ${fmtDateTime(settings.lastExportAt)}.`
             : ' Nenhum export feito ainda.'}
@@ -196,7 +199,7 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
           <Btn
             variant="primary"
             onClick={async () => {
-              await exportBackup()
+              await exportBackup(profile.id)
               setMsg('Backup exportado.')
             }}
           >
@@ -212,7 +215,7 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
                 const file = e.target.files?.[0]
                 if (!file) return
                 try {
-                  const { counts } = await importBackup(file)
+                  const { counts } = await importBackup(profile.id, file)
                   setMsg(
                     `Importado: ${counts.injections} aplicacoes, ${counts.weighIns} pesagens, ${counts.symptoms} sintomas, ${counts.nutrition} dias.`,
                   )
@@ -228,10 +231,11 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
       </Card>
 
       <Card title="Zona de risco">
-        <p className="muted-small">Apaga perfil, cronograma e todos os registros deste aparelho. Sem volta.</p>
+        <p className="muted-small">Apaga perfil, cronograma e todos os registros salvos na sua conta. Sem volta.</p>
         <ConfirmButton
           confirmLabel="Apagar tudo mesmo?"
           onConfirm={async () => {
+            await repo.wipeAllForUser(profile.id)
             await wipeAll()
             location.reload()
           }}

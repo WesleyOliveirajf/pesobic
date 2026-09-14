@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { db } from '../db/db'
+import * as repo from '../lib/repo'
+import { useAuthProfile } from '../lib/auth-context'
 import type { Settings, Severity, SymptomKey, SymptomLog } from '../db/types'
 import {
   Btn,
@@ -33,7 +34,7 @@ const PALETTE = [
 ]
 
 export function Symptoms({ settings }: { settings: Settings }) {
-  const symptoms = useSymptoms() ?? []
+  const [symptoms, reloadSymptoms] = useSymptoms()
   const [edit, setEdit] = useState<SymptomLog | null>(null)
 
   const activeKeys = useMemo(() => {
@@ -74,7 +75,7 @@ export function Symptoms({ settings }: { settings: Settings }) {
 
   return (
     <div className="screen">
-      <QuickLog />
+      <QuickLog onSaved={reloadSymptoms} />
 
       {chartData.length >= 2 && (
         <Card title="Severidade ao longo do tempo">
@@ -111,29 +112,37 @@ export function Symptoms({ settings }: { settings: Settings }) {
         )}
       </Card>
 
-      {edit && <EditSymptom row={edit} onClose={() => setEdit(null)} />}
+      {edit && <EditSymptom row={edit} onClose={() => setEdit(null)} onSaved={reloadSymptoms} />}
     </div>
   )
 }
 
-function QuickLog() {
+function QuickLog({ onSaved }: { onSaved: () => Promise<void> }) {
+  const profile = useAuthProfile()
   const [symptom, setSymptom] = useState<SymptomKey>('nausea')
   const [severity, setSeverity] = useState<Severity>(1)
-  const [when, setWhen] = useState(tsToLocalInput(Date.now()))
+  const [when, setWhen] = useState(() => tsToLocalInput(Date.now()))
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
 
   async function save() {
     setBusy(true)
-    await db.symptoms.add({
-      at: localInputToTs(when),
-      symptom,
-      severity,
-      note: note.trim() || undefined,
-    })
-    setSeverity(1)
-    setNote('')
-    setWhen(tsToLocalInput(Date.now()))
+    setErr(null)
+    try {
+      await repo.addSymptomLog(profile.id, {
+        at: localInputToTs(when),
+        symptom,
+        severity,
+        note: note.trim() || undefined,
+      })
+      await onSaved()
+      setSeverity(1)
+      setNote('')
+      setWhen(tsToLocalInput(Date.now()))
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
+    }
     setBusy(false)
   }
 
@@ -157,6 +166,7 @@ function QuickLog() {
           <TextInput value={note} onChange={(e) => setNote(e.target.value)} placeholder="opcional" />
         </Field>
       </div>
+      {err && <p className="error-box">{err}</p>}
       <Btn variant="primary" block disabled={busy} onClick={save}>
         Registrar
       </Btn>
@@ -164,20 +174,35 @@ function QuickLog() {
   )
 }
 
-function EditSymptom({ row, onClose }: { row: SymptomLog; onClose: () => void }) {
+function EditSymptom({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: SymptomLog
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
   const [symptom, setSymptom] = useState<SymptomKey>(row.symptom)
   const [severity, setSeverity] = useState<Severity>(row.severity)
   const [when, setWhen] = useState(tsToLocalInput(row.at))
   const [note, setNote] = useState(row.note ?? '')
+  const [err, setErr] = useState<string | null>(null)
 
   async function save() {
-    await db.symptoms.update(row.id!, {
-      symptom,
-      severity,
-      at: localInputToTs(when),
-      note: note.trim() || undefined,
-    })
-    onClose()
+    setErr(null)
+    try {
+      await repo.updateSymptomLog(row.id!, {
+        symptom,
+        severity,
+        at: localInputToTs(when),
+        note: note.trim() || undefined,
+      })
+      await onSaved()
+      onClose()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
+    }
   }
 
   return (
@@ -198,10 +223,12 @@ function EditSymptom({ row, onClose }: { row: SymptomLog; onClose: () => void })
       <Field label="Observacao">
         <TextInput value={note} onChange={(e) => setNote(e.target.value)} />
       </Field>
+      {err && <p className="error-box">{err}</p>}
       <div className="btn-row">
         <ConfirmButton
           onConfirm={async () => {
-            await db.symptoms.delete(row.id!)
+            await repo.deleteSymptomLog(row.id!)
+            await onSaved()
             onClose()
           }}
         >

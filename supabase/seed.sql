@@ -1,0 +1,2 @@
+-- Dados de desenvolvimento devem ser anônimos e nunca podem ser copiados da produção.
+-- O seed será adicionado quando o schema multiusuário estiver versionado.

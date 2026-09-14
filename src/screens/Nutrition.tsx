@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { db } from '../db/db'
+import { useState } from 'react'
+import * as repo from '../lib/repo'
+import { useAuthProfile } from '../lib/auth-context'
 import type { NutritionDay, Settings } from '../db/types'
 import { Btn, Card, ConfirmButton, EmptyState, Field, Modal, NumberInput, ProgressBar, TextInput } from '../components/ui'
 import { ProteinChart } from '../components/charts'
@@ -7,38 +8,32 @@ import { useNutrition, useWeighIns } from '../hooks'
 import { fmtDate, num, todayISO } from '../lib/format'
 import { latestWeight, proteinGoal } from '../lib/metrics'
 
-async function upsertToday(patch: Partial<NutritionDay>) {
-  const date = todayISO()
-  const existing = await db.nutrition.where('date').equals(date).first()
-  if (existing) {
-    await db.nutrition.update(existing.id!, patch)
-  } else {
-    await db.nutrition.add({
-      date,
-      proteinG: 0,
-      waterMl: 0,
-      meals: 0,
-      ...patch,
-    })
-  }
-}
-
 export function Nutrition({ settings }: { settings: Settings }) {
-  const nutrition = useNutrition() ?? []
-  const weighIns = useWeighIns() ?? []
+  const profile = useAuthProfile()
+  const [nutrition, reloadNutrition] = useNutrition()
+  const [weighIns] = useWeighIns()
   const [edit, setEdit] = useState<NutritionDay | null>(null)
+  const [err, setErr] = useState<string | null>(null)
 
   const today = todayISO()
   const todayRow = nutrition.find((n) => n.date === today)
   const current = latestWeight(weighIns, settings)
   const pGoal = proteinGoal(current, settings)
 
-  const chartData = useMemo(() => {
-    return [...nutrition]
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-30)
-      .map((n) => ({ date: n.date, proteina: n.proteinG, meta: pGoal }))
-  }, [nutrition, pGoal])
+  async function upsertToday(patch: Partial<Omit<NutritionDay, 'id' | 'date'>>) {
+    setErr(null)
+    try {
+      await repo.upsertNutritionDay(profile.id, today, patch, todayRow)
+      await reloadNutrition()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
+    }
+  }
+
+  const chartData = [...nutrition]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-30)
+    .map((n) => ({ date: n.date, proteina: n.proteinG, meta: pGoal }))
 
   const protein = todayRow?.proteinG ?? 0
   const water = todayRow?.waterMl ?? 0
@@ -106,6 +101,7 @@ export function Nutrition({ settings }: { settings: Settings }) {
             placeholder="opcional"
           />
         </Field>
+        {err && <p className="error-box">{err}</p>}
       </Card>
 
       {chartData.length >= 2 && (
@@ -135,25 +131,40 @@ export function Nutrition({ settings }: { settings: Settings }) {
         )}
       </Card>
 
-      {edit && <EditDay row={edit} onClose={() => setEdit(null)} />}
+      {edit && <EditDay row={edit} onClose={() => setEdit(null)} onSaved={reloadNutrition} />}
     </div>
   )
 }
 
-function EditDay({ row, onClose }: { row: NutritionDay; onClose: () => void }) {
+function EditDay({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: NutritionDay
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
   const [proteinG, setProteinG] = useState<number | null>(row.proteinG)
   const [waterMl, setWaterMl] = useState<number | null>(row.waterMl)
   const [meals, setMeals] = useState<number | null>(row.meals)
   const [note, setNote] = useState(row.note ?? '')
+  const [err, setErr] = useState<string | null>(null)
 
   async function save() {
-    await db.nutrition.update(row.id!, {
-      proteinG: proteinG ?? 0,
-      waterMl: waterMl ?? 0,
-      meals: meals ?? 0,
-      note: note.trim() || undefined,
-    })
-    onClose()
+    setErr(null)
+    try {
+      await repo.updateNutritionDay(row.id!, {
+        proteinG: proteinG ?? 0,
+        waterMl: waterMl ?? 0,
+        meals: meals ?? 0,
+        note: note.trim() || undefined,
+      })
+      await onSaved()
+      onClose()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
+    }
   }
 
   return (
@@ -172,10 +183,12 @@ function EditDay({ row, onClose }: { row: NutritionDay; onClose: () => void }) {
           <TextInput value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
       </div>
+      {err && <p className="error-box">{err}</p>}
       <div className="btn-row">
         <ConfirmButton
           onConfirm={async () => {
-            await db.nutrition.delete(row.id!)
+            await repo.deleteNutritionDay(row.id!)
+            await onSaved()
             onClose()
           }}
         >

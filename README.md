@@ -31,6 +31,29 @@ $env:DEPLOY_BASE='/pesobic/'; npm run build
 
 Em dominio proprio, Netlify ou Vercel, deixe `DEPLOY_BASE` em branco.
 
+## Qualidade
+
+```sh
+npm run check     # lint + testes + build
+npm run test:run  # 14 testes de dominio
+```
+
+## Supabase local
+
+O schema multiusuario e declarativo e fica em `supabase/schemas/`. Para gerar a
+migration e executar os testes de RLS e necessario ter Docker (ou runtime compativel)
+em execucao:
+
+```sh
+npm exec supabase start
+npm run db:diff
+npm exec supabase db reset
+npm run db:test
+```
+
+Revise a migration gerada antes de aplica-la. Esses comandos usam o ambiente local;
+nenhuma alteracao deve ser enviada ao projeto remoto sem autorizacao explicita.
+
 ## Backup
 
 Config > Exportar backup (JSON). Faca com frequencia: se o iPhone se perder, o arquivo

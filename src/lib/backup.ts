@@ -1,4 +1,5 @@
 import { db, patchSettings } from '../db/db'
+import * as repo from './repo'
 import type {
   Injection,
   NutritionDay,
@@ -23,13 +24,13 @@ interface BackupFile {
   nutrition: NutritionDay[]
 }
 
-export async function exportBackup(): Promise<void> {
+export async function exportBackup(userId: string): Promise<void> {
   const [settings, injections, weighIns, symptoms, nutrition] = await Promise.all([
     db.settings.get('singleton'),
-    db.injections.toArray(),
-    db.weighIns.toArray(),
-    db.symptoms.toArray(),
-    db.nutrition.toArray(),
+    repo.listInjections(userId),
+    repo.listWeighIns(userId),
+    repo.listSymptomLogs(userId),
+    repo.listNutritionDays(userId),
   ])
   const data: BackupFile = {
     format: FORMAT,
@@ -46,7 +47,8 @@ export async function exportBackup(): Promise<void> {
   await patchSettings({ lastExportAt: Date.now() })
 }
 
-export async function importBackup(file: File): Promise<{ counts: Record<string, number> }> {
+/** Importa um backup: substitui os registros do usuario no banco (perfil local fica intacto). */
+export async function importBackup(userId: string, file: File): Promise<{ counts: Record<string, number> }> {
   const text = await file.text()
   const data = JSON.parse(text) as Partial<BackupFile>
   if (data.format !== FORMAT) {
@@ -58,23 +60,19 @@ export async function importBackup(file: File): Promise<{ counts: Record<string,
   const symptoms = data.symptoms ?? []
   const nutrition = data.nutrition ?? []
 
-  await db.transaction(
-    'rw',
-    [db.settings, db.injections, db.weighIns, db.symptoms, db.nutrition],
-    async () => {
-      await Promise.all([
-        db.injections.clear(),
-        db.weighIns.clear(),
-        db.symptoms.clear(),
-        db.nutrition.clear(),
-      ])
-      if (data.settings) await db.settings.put({ ...data.settings, id: 'singleton' })
-      await db.injections.bulkAdd(injections.map(stripId))
-      await db.weighIns.bulkAdd(weighIns.map(stripId))
-      await db.symptoms.bulkAdd(symptoms.map(stripId))
-      await db.nutrition.bulkAdd(nutrition.map(stripId))
-    },
-  )
+  await repo.wipeAllForUser(userId)
+  if (data.settings) await db.settings.put({ ...data.settings, id: 'singleton' })
+  for (const row of injections) await repo.addInjection(userId, stripId(row))
+  for (const row of weighIns) await repo.addWeighIn(userId, stripId(row))
+  for (const row of symptoms) await repo.addSymptomLog(userId, stripId(row))
+  for (const row of nutrition) {
+    await repo.upsertNutritionDay(userId, row.date, {
+      proteinG: row.proteinG,
+      waterMl: row.waterMl,
+      meals: row.meals,
+      note: row.note,
+    })
+  }
 
   return {
     counts: {
@@ -86,7 +84,7 @@ export async function importBackup(file: File): Promise<{ counts: Record<string,
   }
 }
 
-function stripId<T extends { id?: number }>(row: T): Omit<T, 'id'> {
+function stripId<T extends { id?: string }>(row: T): Omit<T, 'id'> {
   const { id: _id, ...rest } = row
   return rest
 }

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { db } from '../db/db'
+import * as repo from '../lib/repo'
+import { useAuthProfile } from '../lib/auth-context'
 import type { Settings, WeighIn } from '../db/types'
 import {
   Btn,
@@ -26,7 +28,7 @@ const OPTIONAL_MEASURES: { key: keyof WeighIn; label: string }[] = [
 ]
 
 export function Weight({ settings }: { settings: Settings }) {
-  const weighIns = useWeighIns() ?? []
+  const [weighIns, reloadWeighIns] = useWeighIns()
   const [edit, setEdit] = useState<WeighIn | null>(null)
   const [showPhotos, setShowPhotos] = useState(false)
 
@@ -45,7 +47,7 @@ export function Weight({ settings }: { settings: Settings }) {
 
   return (
     <div className="screen">
-      <QuickAdd />
+      <QuickAdd onSaved={reloadWeighIns} />
 
       <Card title="Resumo">
         <div className="stat-row">
@@ -108,7 +110,7 @@ export function Weight({ settings }: { settings: Settings }) {
         )}
       </Card>
 
-      {edit && <EditWeighIn row={edit} onClose={() => setEdit(null)} />}
+      {edit && <EditWeighIn row={edit} onClose={() => setEdit(null)} onSaved={reloadWeighIns} />}
       {showPhotos && <PhotosModal onClose={() => setShowPhotos(false)} />}
     </div>
   )
@@ -121,7 +123,8 @@ function emptyMeasures() {
   >
 }
 
-function QuickAdd() {
+function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
+  const profile = useAuthProfile()
   const [date, setDate] = useState(todayISO())
   const [weightKg, setWeightKg] = useState<number | null>(null)
   const [waistCm, setWaistCm] = useState<number | null>(null)
@@ -131,6 +134,11 @@ function QuickAdd() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
+  function extraValue(key: string): number | undefined {
+    const v = extra[key]
+    return typeof v === 'number' && !Number.isNaN(v) ? v : undefined
+  }
+
   async function save() {
     setErr(null)
     if (!weightKg || weightKg < 30 || weightKg > 400) {
@@ -138,24 +146,29 @@ function QuickAdd() {
       return
     }
     setBusy(true)
-    const row: WeighIn = {
+    const row: Omit<WeighIn, 'id'> = {
       date,
       at: date === todayISO() ? Date.now() : new Date(`${date}T12:00`).getTime(),
       weightKg,
       waistCm: waistCm ?? undefined,
+      hipCm: extraValue('hipCm'),
+      armCm: extraValue('armCm'),
+      thighCm: extraValue('thighCm'),
+      chestCm: extraValue('chestCm'),
+      neckCm: extraValue('neckCm'),
       note: note.trim() || undefined,
     }
-    const bag = row as unknown as Record<string, unknown>
-    for (const k of Object.keys(extra)) {
-      const v = extra[k]
-      if (typeof v === 'number' && !Number.isNaN(v)) bag[k] = v
+    try {
+      await repo.addWeighIn(profile.id, row)
+      await onSaved()
+      setWeightKg(null)
+      setWaistCm(null)
+      setNote('')
+      setExtra(emptyMeasures())
+      setMore(false)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
     }
-    await db.weighIns.add(row)
-    setWeightKg(null)
-    setWaistCm(null)
-    setNote('')
-    setExtra(emptyMeasures())
-    setMore(false)
     setBusy(false)
   }
 
@@ -202,7 +215,15 @@ function QuickAdd() {
   )
 }
 
-function EditWeighIn({ row, onClose }: { row: WeighIn; onClose: () => void }) {
+function EditWeighIn({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: WeighIn
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
   const [weightKg, setWeightKg] = useState<number | null>(row.weightKg)
   const [waistCm, setWaistCm] = useState<number | null>(row.waistCm ?? null)
   const [date, setDate] = useState(row.date)
@@ -214,20 +235,28 @@ function EditWeighIn({ row, onClose }: { row: WeighIn; onClose: () => void }) {
     chestCm: row.chestCm ?? null,
     neckCm: row.neckCm ?? null,
   })
+  const [err, setErr] = useState<string | null>(null)
 
   async function save() {
-    const patch: Partial<WeighIn> = {
+    setErr(null)
+    const patch: Partial<Omit<WeighIn, 'id'>> = {
       date,
       weightKg: weightKg ?? row.weightKg,
       waistCm: waistCm ?? undefined,
+      hipCm: extra.hipCm ?? undefined,
+      armCm: extra.armCm ?? undefined,
+      thighCm: extra.thighCm ?? undefined,
+      chestCm: extra.chestCm ?? undefined,
+      neckCm: extra.neckCm ?? undefined,
       note: note.trim() || undefined,
     }
-    const bag = patch as unknown as Record<string, unknown>
-    for (const k of Object.keys(extra)) {
-      bag[k] = extra[k] ?? undefined
+    try {
+      await repo.updateWeighIn(row.id!, patch)
+      await onSaved()
+      onClose()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
     }
-    await db.weighIns.update(row.id!, patch)
-    onClose()
   }
 
   return (
@@ -254,10 +283,12 @@ function EditWeighIn({ row, onClose }: { row: WeighIn; onClose: () => void }) {
           </Field>
         ))}
       </div>
+      {err && <p className="error-box">{err}</p>}
       <div className="btn-row">
         <ConfirmButton
           onConfirm={async () => {
-            await db.weighIns.delete(row.id!)
+            await repo.deleteWeighIn(row.id!)
+            await onSaved()
             onClose()
           }}
         >
