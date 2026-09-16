@@ -1,26 +1,42 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { cacheSettings, db, replaceCache } from './db/db'
 import { useAuthProfile } from './lib/auth-context'
 import * as repo from './lib/repo'
 import type { Injection, NutritionDay, Settings, SymptomLog, WeighIn } from './db/types'
 
+/**
+ * Enquanto a conta e consultada, a ausencia do cache local nao significa que
+ * o usuario ainda precisa concluir o onboarding.
+ */
+export function resolveSettings(
+  cached: Settings | null | undefined,
+  remote: Settings | null | undefined,
+): Settings | null | undefined {
+  return remote === undefined ? cached ?? undefined : remote
+}
+
 export function useSettings() {
   const profile = useAuthProfile()
   const cached = useLiveQuery(async () => (await db.settings.get('singleton')) ?? null, [profile.id])
+  const [remote, setRemote] = useState<Settings | null | undefined>(undefined)
 
   useEffect(() => {
     let active = true
+    setRemote(undefined)
     void (async () => {
       try {
-        const remote = await repo.loadAccountSettings(profile.id)
+        const settings = await repo.loadAccountSettings(profile.id)
         if (!active) return
-        if (remote) {
+        if (settings) {
           const local = await db.settings.get('singleton')
-          await cacheSettings({ ...remote, lastExportAt: local?.lastExportAt ?? null })
+          await cacheSettings({ ...settings, lastExportAt: local?.lastExportAt ?? null })
         }
+        if (active) setRemote(settings)
       } catch {
         /* keep last cache */
+        const local = await db.settings.get('singleton')
+        if (active) setRemote(local ?? null)
       }
     })()
     return () => {
@@ -28,7 +44,7 @@ export function useSettings() {
     }
   }, [profile.id])
 
-  return cached
+  return resolveSettings(cached, remote)
 }
 
 export async function persistSettings(userId: string, next: Settings): Promise<Settings> {
