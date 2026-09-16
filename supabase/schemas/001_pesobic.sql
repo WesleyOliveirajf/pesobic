@@ -21,6 +21,8 @@ create table public.profiles (
   email text not null,
   full_name text check (full_name is null or char_length(full_name) <= 160),
   access_enabled boolean not null default false,
+  account_enabled boolean not null default true,
+  nutrition_enabled boolean not null default true,
   is_admin boolean not null default false,
   height_cm numeric(5, 2) check (height_cm between 50 and 300),
   start_weight_kg numeric(6, 2) check (start_weight_kg between 20 and 500),
@@ -56,7 +58,7 @@ set search_path = ''
 as $$
   select exists (
     select 1 from public.profiles
-    where id = (select auth.uid()) and (access_enabled = true or is_admin = true)
+    where id = (select auth.uid()) and ((account_enabled = true or access_enabled = true) or is_admin = true)
   );
 $$;
 
@@ -93,7 +95,28 @@ begin
   end if;
 
   update public.profiles
-  set access_enabled = enabled, updated_at = now()
+  set access_enabled = enabled, account_enabled = enabled, updated_at = now()
+  where id = target_user_id and is_admin = false;
+end;
+$$;
+
+create or replace function public.admin_set_user_nutrition_access(target_user_id uuid, enabled boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not private.is_admin() then
+    raise exception 'Acesso restrito ao administrador';
+  end if;
+
+  if target_user_id = (select auth.uid()) then
+    raise exception 'O administrador nao pode bloquear o proprio modulo';
+  end if;
+
+  update public.profiles
+  set nutrition_enabled = enabled, updated_at = now()
   where id = target_user_id and is_admin = false;
 end;
 $$;
@@ -102,9 +125,11 @@ revoke all on function private.is_admin() from public, anon;
 revoke all on function private.has_active_access() from public, anon;
 revoke all on function private.handle_new_user() from public, anon, authenticated;
 revoke all on function public.admin_set_user_access(uuid, boolean) from public, anon;
+revoke all on function public.admin_set_user_nutrition_access(uuid, boolean) from public, anon;
 grant execute on function private.is_admin() to authenticated;
 grant execute on function private.has_active_access() to authenticated;
 grant execute on function public.admin_set_user_access(uuid, boolean) to authenticated;
+grant execute on function public.admin_set_user_nutrition_access(uuid, boolean) to authenticated;
 grant usage on schema private to authenticated;
 
 create table public.medication_plans (

@@ -54,7 +54,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const loadProfile = async () => {
       const { data, error } = await client
         .from('profiles')
-        .select('id,email,full_name,access_enabled,is_admin,created_at,updated_at')
+        .select('id,email,full_name,access_enabled,account_enabled,nutrition_enabled,is_admin,created_at,updated_at')
         .eq('id', session.user.id)
         .single()
       if (!active) return
@@ -91,6 +91,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </main>
     )
   }
-  if (!profile.access_enabled && !profile.is_admin) return <AccessPending name={profile.full_name} />
+  const accountAllowed = profile.account_enabled ?? profile.access_enabled
+  if ((!accountAllowed && !profile.is_admin) || (!profile.access_enabled && !profile.is_admin)) return <AccessPending name={profile.full_name} />
   return <AuthContext.Provider value={profile}>{children}</AuthContext.Provider>
 }

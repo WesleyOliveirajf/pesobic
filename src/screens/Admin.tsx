@@ -13,7 +13,7 @@ export function AdminScreen() {
     if (!supabase) return
     const { data, error: queryError } = await supabase
       .from('profiles')
-      .select('id,email,full_name,access_enabled,is_admin,created_at,updated_at')
+      .select('id,email,full_name,access_enabled,account_enabled,nutrition_enabled,is_admin,created_at,updated_at')
       .order('created_at', { ascending: false })
     if (queryError) setError(queryError.message)
     else {
@@ -41,18 +41,31 @@ export function AdminScreen() {
       enabled,
     })
     if (rpcError) setError(rpcError.message)
-    else setPeople((current) => current.map((item) => item.id === person.id ? { ...item, access_enabled: enabled } : item))
+    else setPeople((current) => current.map((item) => item.id === person.id ? { ...item, access_enabled: enabled, account_enabled: enabled } : item))
     setChangingId(null)
   }
 
-  const activeCount = people.filter((person) => person.access_enabled || person.is_admin).length
+  async function changeNutrition(person: AccessProfile, enabled: boolean) {
+    if (!supabase || person.is_admin) return
+    setChangingId(person.id)
+    setError(null)
+    const { error: rpcError } = await supabase.rpc('admin_set_user_nutrition_access', {
+      target_user_id: person.id,
+      enabled,
+    })
+    if (rpcError) setError(rpcError.message)
+    else setPeople((current) => current.map((item) => item.id === person.id ? { ...item, nutrition_enabled: enabled } : item))
+    setChangingId(null)
+  }
+
+  const activeCount = people.filter((person) => (person.account_enabled ?? person.access_enabled) || person.is_admin).length
 
   return (
     <div className="screen admin-screen">
       <header className="admin-head">
         <div>
           <h1>Assinantes</h1>
-          <p>Libere ou pause o acesso de cada pessoa.</p>
+          <p>Ative ou pause o acesso da conta e do módulo de nutrição de cada pessoa.</p>
         </div>
         <button type="button" className="btn btn-plain" onClick={() => void loadPeople()}>Atualizar</button>
       </header>
@@ -72,7 +85,9 @@ export function AdminScreen() {
       {loading ? <p className="empty">Carregando cadastros…</p> : (
         <div className="subscriber-list">
           {filtered.map((person) => {
-            const enabled = person.access_enabled || person.is_admin
+            const accountEnabled = person.account_enabled ?? person.access_enabled ?? false
+            const nutritionEnabled = person.nutrition_enabled ?? true
+            const enabled = accountEnabled || person.is_admin
             return (
               <article className="subscriber" key={person.id}>
                 <div className="subscriber-avatar" aria-hidden="true">{(person.full_name || person.email).slice(0, 1).toUpperCase()}</div>
@@ -81,11 +96,20 @@ export function AdminScreen() {
                   <span>{person.email}</span>
                   <small>{person.is_admin ? 'Administrador master' : enabled ? 'Acesso liberado' : 'Aguardando liberação'}</small>
                 </div>
-                <label className="access-switch" title={person.is_admin ? 'O administrador master permanece ativo' : undefined}>
-                  <input type="checkbox" checked={enabled} disabled={person.is_admin || changingId === person.id} onChange={(event) => void changeAccess(person, event.target.checked)} />
-                  <span aria-hidden="true" />
-                  <em className="sr-only">{enabled ? 'Desativar acesso' : 'Ativar acesso'} de {person.full_name || person.email}</em>
-                </label>
+                <div className="subscriber-flags" aria-label={`Controles de acesso para ${person.full_name || person.email}`}>
+                  <label className="access-switch" title={person.is_admin ? 'O administrador master permanece ativo' : 'Ativar ou desativar acesso da conta'}>
+                    <input type="checkbox" checked={accountEnabled || person.is_admin} disabled={person.is_admin || changingId === person.id} onChange={(event) => void changeAccess(person, event.target.checked)} />
+                    <span aria-hidden="true" />
+                    <em className="sr-only">{accountEnabled ? 'Desativar conta' : 'Ativar conta'} de {person.full_name || person.email}</em>
+                    <span className="flag-label">Conta</span>
+                  </label>
+                  <label className="access-switch" title={person.is_admin ? 'A nutrição do administrador permanece ativa' : 'Ativar ou desativar módulo de nutrição'}>
+                    <input type="checkbox" checked={person.is_admin ? true : nutritionEnabled} disabled={person.is_admin || changingId === person.id} onChange={(event) => void changeNutrition(person, event.target.checked)} />
+                    <span aria-hidden="true" />
+                    <em className="sr-only">{nutritionEnabled ? 'Desativar nutrição' : 'Ativar nutrição'} de {person.full_name || person.email}</em>
+                    <span className="flag-label">Nutrição</span>
+                  </label>
+                </div>
               </article>
             )
           })}

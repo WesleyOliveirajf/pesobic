@@ -9,7 +9,7 @@ import { Nutrition } from './screens/Nutrition'
 import { SettingsScreen } from './screens/Settings'
 import { exportBackup } from './lib/backup'
 import { supabase } from './lib/supabase'
-import { useAuthProfile } from './lib/auth-context'
+import { getVisibleTabs, useAuthProfile } from './lib/auth-context'
 import { AdminScreen } from './screens/Admin'
 
 type Tab = 'inicio' | 'caneta' | 'peso' | 'sintomas' | 'nutricao' | 'config' | 'admin'
@@ -29,7 +29,7 @@ const MONTH = 30 * 86_400_000
 export default function App() {
   const settings = useSettings()
   const authProfile = useAuthProfile()
-  const tabs = authProfile.is_admin ? TABS : TABS.filter((item) => item.id !== 'admin')
+  const tabs = getVisibleTabs(TABS, authProfile)
   const [tab, setTab] = useState<Tab>(() => {
     try {
       return (localStorage.getItem('pesobic:tab') as Tab) || 'inicio'
