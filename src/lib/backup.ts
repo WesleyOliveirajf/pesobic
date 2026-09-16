@@ -1,4 +1,4 @@
-import { db, patchSettings } from '../db/db'
+import { cacheSettings, db, patchLocalSettings } from '../db/db'
 import * as repo from './repo'
 import type {
   Injection,
@@ -25,13 +25,17 @@ interface BackupFile {
 }
 
 export async function exportBackup(userId: string): Promise<void> {
-  const [settings, injections, weighIns, symptoms, nutrition] = await Promise.all([
+  const [cached, remoteSettings, injections, weighIns, symptoms, nutrition] = await Promise.all([
     db.settings.get('singleton'),
+    repo.loadAccountSettings(userId).catch(() => null),
     repo.listInjections(userId),
     repo.listWeighIns(userId),
     repo.listSymptomLogs(userId),
     repo.listNutritionDays(userId),
   ])
+  const settings = remoteSettings
+    ? { ...remoteSettings, lastExportAt: cached?.lastExportAt ?? null }
+    : cached ?? null
   const data: BackupFile = {
     format: FORMAT,
     version: VERSION,
@@ -44,7 +48,7 @@ export async function exportBackup(userId: string): Promise<void> {
   }
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   triggerDownload(blob, `pesobic-backup-${todayISO()}.json`)
-  await patchSettings({ lastExportAt: Date.now() })
+  await patchLocalSettings({ lastExportAt: Date.now() })
 }
 
 /** Importa um backup: substitui os registros do usuario no banco (perfil local fica intacto). */
@@ -61,7 +65,10 @@ export async function importBackup(userId: string, file: File): Promise<{ counts
   const nutrition = data.nutrition ?? []
 
   await repo.wipeAllForUser(userId)
-  if (data.settings) await db.settings.put({ ...data.settings, id: 'singleton' })
+  if (data.settings) {
+    const saved = await repo.saveAccountSettings(userId, { ...data.settings, id: 'singleton' })
+    await cacheSettings(saved)
+  }
   for (const row of injections) await repo.addInjection(userId, stripId(row))
   for (const row of weighIns) await repo.addWeighIn(userId, stripId(row))
   for (const row of symptoms) await repo.addSymptomLog(userId, stripId(row))

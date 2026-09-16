@@ -1,14 +1,15 @@
 # Pesobic
 
 PWA para acompanhar o emagrecimento com canetas GLP-1: aplicacoes, dose e
-titulacao, peso e medidas, sintomas e proteina. Conta na nuvem (Supabase);
-o aparelho e cache. Recorte Brasil, pt-BR.
+titulacao, peso e medidas, sintomas e proteina. **Conta na nuvem (Supabase) e a
+copia oficial**; o aparelho e cache. Recorte Brasil, pt-BR.
 
 Barra de produto e tasks dos agentes: [`TASKS.md`](./TASKS.md).
 
 > Nao prescreve dose, nao da diagnostico e nao substitui acompanhamento profissional.
 
-Detalhes de escopo, modelo de dados e lista de tarefas: [`SPEC.md`](./SPEC.md).
+Detalhes historicos de escopo: [`SPEC.md`](./SPEC.md). A execucao atual esta em
+[`TASKS.md`](./TASKS.md).
 
 ## Desenvolvimento
 
@@ -16,6 +17,9 @@ Detalhes de escopo, modelo de dados e lista de tarefas: [`SPEC.md`](./SPEC.md).
 npm install
 npm run dev
 ```
+
+Cadastro por e-mail e senha (sem Google/Apple nesta barra). Confirmacao de
+e-mail e recuperacao de senha exigem SMTP do Auth no ambiente de producao.
 
 ## Build
 
@@ -37,12 +41,12 @@ Em dominio proprio, Netlify ou Vercel, deixe `DEPLOY_BASE` em branco.
 
 ```sh
 npm run check     # lint + testes + build
-npm run test:run  # 14 testes de dominio
+npm run test:run  # testes de dominio
 ```
 
 ## Supabase local
 
-O schema multiusuario e declarativo e fica em `supabase/schemas/`. Para gerar a
+O schema e declarativo e fica em `supabase/schemas/`. Para gerar a
 migration e executar os testes de RLS e necessario ter Docker (ou runtime compativel)
 em execucao:
 
@@ -53,14 +57,18 @@ npm exec supabase db reset
 npm run db:test
 ```
 
-Revise a migration gerada antes de aplica-la. Esses comandos usam o ambiente local;
-nenhuma alteracao deve ser enviada ao projeto remoto sem autorizacao explicita.
+Revise a migration gerada antes de aplica-la. Esses comandos usam o ambiente local.
+**Nao aplicar migration no projeto remoto `bcjtfdhxanfevownlewv` sem ordem
+explicita no chat.**
+
+SMTP do Auth (confirmacao e recuperacao de e-mail) e requisito de producao. Nao
+configure o dashboard SMTP por acidente nesta barra.
 
 ## Backup
 
-Config > Exportar backup (JSON). Faca com frequencia: se o iPhone se perder, o arquivo
-exportado e a unica copia. Fotos de progresso tem export proprio na aba Peso.
+Config > Exportar backup (JSON). A conta na nuvem e a copia oficial; o export
+local e extra. Fotos de progresso ainda ficam so no aparelho (aba Peso).
 
 ## Stack
 
-Vite · React · TypeScript · Dexie (IndexedDB) · Recharts · vite-plugin-pwa
+Vite · React · TypeScript · Dexie (cache IndexedDB) · Recharts · vite-plugin-pwa · Supabase
