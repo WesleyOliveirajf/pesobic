@@ -2,6 +2,7 @@
 // Fonte oficial dos dados (injections, weigh_ins, symptom_logs, nutrition_days, perfil).
 import { supabase } from './supabase'
 import { asUuid } from './ids'
+import { errorMessage } from './errors'
 import type { AccessProfile } from './auth-context'
 import type { Injection, MedicationKey, NutritionDay, Settings, SymptomLog, TitrationPhase, WeighIn } from '../db/types'
 
@@ -24,7 +25,7 @@ function rethrow(error: unknown, kind: 'read' | 'write'): never {
         : 'Sem rede. Nao foi possivel atualizar os dados.',
     )
   }
-  throw error instanceof Error ? error : new Error(String(error))
+  throw new Error(errorMessage(error))
 }
 
 // ---------- injections ----------

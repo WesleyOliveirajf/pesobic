@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { persistSettings } from '../hooks'
 import { useAuthProfile } from '../lib/auth-context'
+import { errorMessage } from '../lib/errors'
 import type { MedicationKey, Settings } from '../db/types'
 import { Btn, Card, Field, NumberInput, Select, TextInput } from '../components/ui'
 import { MEDICATIONS } from '../lib/domain'
@@ -18,15 +19,10 @@ export function Onboarding() {
   const [useTemplate, setUseTemplate] = useState(true)
   const [reminderWeekday, setReminderWeekday] = useState(0)
   const [reminderTime, setReminderTime] = useState('09:00')
-  const [proteinFactor, setProteinFactor] = useState<number | null>(1.6)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   const template = TITRATION_TEMPLATES[medication]
-  const proteinPreview = useMemo(() => {
-    if (!startWeightKg || !proteinFactor) return null
-    return Math.round(startWeightKg * proteinFactor)
-  }, [startWeightKg, proteinFactor])
 
   async function submit() {
     setErr(null)
@@ -35,8 +31,6 @@ export function Onboarding() {
     if (!goalWeightKg || goalWeightKg < 30) return setErr('Informe o peso alvo em kg.')
     if (goalWeightKg >= startWeightKg) return setErr('O peso alvo deve ser menor que o peso inicial.')
     if (medication === 'outro' && !medicationLabel.trim()) return setErr('Informe o nome do medicamento.')
-    if (!proteinFactor || proteinFactor <= 0) return setErr('Informe o fator de proteina (g/kg).')
-
     setSaving(true)
     const phases = (useTemplate ? template.phases() : TITRATION_TEMPLATES.outro.phases())
     const now = Date.now()
@@ -50,7 +44,9 @@ export function Onboarding() {
       goalWeightKg,
       medication,
       medicationLabel: medicationLabel.trim(),
-      proteinFactor,
+      // A meta de proteina nao faz parte do cadastro inicial.
+      // O valor padrao e mantido apenas para preservar os dados existentes.
+      proteinFactor: 1.2,
       proteinManualGoal: null,
       waterGoalMl: 2000,
       reminderWeekday,
@@ -64,7 +60,7 @@ export function Onboarding() {
       await persistSettings(profile.id, settings)
     } catch (e) {
       setSaving(false)
-      setErr(e instanceof Error ? e.message : 'Falha ao salvar. Sem rede a escrita nao e gravada.')
+      setErr(errorMessage(e, 'Falha ao salvar. Sem rede a escrita não é gravada.'))
     }
   }
 
@@ -144,12 +140,6 @@ export function Onboarding() {
         <p className="disclaimer">
           Depois voce baixa um arquivo .ics e adiciona ao Calendario do iPhone — o alarme nativo cuida do resto.
         </p>
-      </Card>
-
-      <Card title="Proteina">
-        <Field label="Meta por kg de peso (g/kg)" hint={proteinPreview ? `Hoje daria ~${proteinPreview} g/dia` : 'Faixa comum em deficit: 1,2 a 2,0 g/kg'}>
-          <NumberInput value={proteinFactor} onValue={setProteinFactor} step="0.1" />
-        </Field>
       </Card>
 
       {err && <p className="error-box">{err}</p>}

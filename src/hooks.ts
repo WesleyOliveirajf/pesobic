@@ -23,7 +23,6 @@ export function useSettings() {
 
   useEffect(() => {
     let active = true
-    setRemote(undefined)
     void (async () => {
       try {
         const settings = await repo.loadAccountSettings(profile.id)
