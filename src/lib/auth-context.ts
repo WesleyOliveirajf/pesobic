@@ -4,7 +4,7 @@ export interface AccessProfile {
   id: string
   email: string
   full_name: string | null
-  access_enabled: boolean
+  blocked: boolean
   is_admin: boolean
   created_at: string
   updated_at: string

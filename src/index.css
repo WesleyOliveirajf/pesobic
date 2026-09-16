@@ -445,6 +445,30 @@ input:focus-visible { outline: 3px solid rgba(32, 151, 137, .28); outline-offset
 .pending-note p { margin: 0; color: #526762; font-size: 12px; }
 .pending-card .auth-submit { width: 100%; }
 .pending-card .auth-text-btn { margin-top: 14px; }
+.legal-card { text-align: left; }
+.legal-card h1 { text-align: center; }
+.legal-card p { color: #526762; font-size: 14px; line-height: 1.55; }
+.auth-checks { display: grid; gap: 10px; margin: 4px 0 8px; }
+.auth-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--text-dim); }
+.auth-check input { margin-top: 3px; }
+.auth-text-btn.inline { display: inline; padding: 0; min-height: 0; }
+.legacy-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 16, 15, .45);
+}
+.legacy-card {
+  width: min(100%, 420px);
+  padding: 22px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.legacy-card ul { margin: 12px 0; padding-left: 18px; color: var(--text-dim); }
 
 /* ---------- Master admin ---------- */
 .admin-screen { gap: 16px; }

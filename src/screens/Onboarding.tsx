@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { db } from '../db/db'
+import { persistSettings } from '../hooks'
+import { useAuthProfile } from '../lib/auth-context'
 import type { MedicationKey, Settings } from '../db/types'
 import { Btn, Card, Field, NumberInput, Select, TextInput } from '../components/ui'
 import { MEDICATIONS } from '../lib/domain'
@@ -7,6 +8,7 @@ import { TITRATION_TEMPLATES, expectedPhaseIndex } from '../lib/titration'
 import { todayISO } from '../lib/format'
 
 export function Onboarding() {
+  const profile = useAuthProfile()
   const [heightCm, setHeightCm] = useState<number | null>(null)
   const [startWeightKg, setStartWeightKg] = useState<number | null>(null)
   const [goalWeightKg, setGoalWeightKg] = useState<number | null>(null)
@@ -59,10 +61,10 @@ export function Onboarding() {
       lastExportAt: null,
     }
     try {
-      await db.settings.put(settings)
+      await persistSettings(profile.id, settings)
     } catch (e) {
       setSaving(false)
-      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar. Sem rede a escrita nao e gravada.')
     }
   }
 
