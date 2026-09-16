@@ -29,7 +29,12 @@ const MONTH = 30 * 86_400_000
 export default function App() {
   const settings = useSettings()
   const authProfile = useAuthProfile()
-  const tabs = authProfile.is_admin ? TABS : TABS.filter((item) => item.id !== 'admin')
+  const hasNutritionAccess = authProfile.is_admin || authProfile.nutrition_enabled
+  const tabs = TABS.filter((item) => {
+    if (item.id === 'admin') return authProfile.is_admin
+    if (item.id === 'nutricao') return hasNutritionAccess
+    return true
+  })
   const [tab, setTab] = useState<Tab>(() => {
     try {
       return (localStorage.getItem('pesobic:tab') as Tab) || 'inicio'
@@ -111,7 +116,7 @@ export default function App() {
         {activeTab === 'caneta' && <Injections settings={settings} />}
         {activeTab === 'peso' && <Weight settings={settings} />}
         {activeTab === 'sintomas' && <Symptoms settings={settings} />}
-        {activeTab === 'nutricao' && <Nutrition settings={settings} />}
+        {activeTab === 'nutricao' && hasNutritionAccess && <Nutrition settings={settings} />}
         {activeTab === 'config' && <SettingsScreen settings={settings} />}
         {activeTab === 'admin' && authProfile.is_admin && <AdminScreen />}
       </main>

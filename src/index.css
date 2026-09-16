@@ -466,6 +466,8 @@ input:focus-visible { outline: 3px solid rgba(32, 151, 137, .28); outline-offset
 .subscriber-data strong { font-size: 13px; }
 .subscriber-data span { color: var(--text-dim); font-size: 11px; }
 .subscriber-data small { margin-top: 3px; color: var(--brand); font-size: 10px; font-weight: 650; }
+.subscriber-controls { display: flex; gap: 10px; }
+.subscriber-control { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-dim); font-size: 10px; font-weight: 650; }
 .access-switch { position: relative; display: inline-flex; }
 .access-switch input { position: absolute; opacity: 0; }
 .access-switch > span { width: 43px; height: 24px; border-radius: 999px; background: #bdc7c5; cursor: pointer; transition: background .15s; }

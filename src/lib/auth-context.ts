@@ -5,6 +5,7 @@ export interface AccessProfile {
   email: string
   full_name: string | null
   access_enabled: boolean
+  nutrition_enabled: boolean
   is_admin: boolean
   created_at: string
   updated_at: string

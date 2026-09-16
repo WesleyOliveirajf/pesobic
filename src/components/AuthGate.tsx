@@ -54,7 +54,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const loadProfile = async () => {
       const { data, error } = await client
         .from('profiles')
-        .select('id,email,full_name,access_enabled,is_admin,created_at,updated_at')
+        .select('id,email,full_name,access_enabled,nutrition_enabled,is_admin,created_at,updated_at')
         .eq('id', session.user.id)
         .single()
       if (!active) return

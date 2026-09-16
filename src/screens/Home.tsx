@@ -1,4 +1,4 @@
-import type { Settings } from '../db/types'
+import type { Settings, WeighIn } from '../db/types'
 import { Card, EmptyState, ProgressBar, Stat } from '../components/ui'
 import { useInjections, useNutrition, useSymptoms, useWeighIns } from '../hooks'
 import { medLabel, SEVERITY_LABEL, symptomLabel } from '../lib/domain'
@@ -13,11 +13,12 @@ import {
   weightStats,
 } from '../lib/metrics'
 import { currentPhase, expectedPhaseIndex } from '../lib/titration'
+import { useAuthProfile } from '../lib/auth-context'
 
 export function Home({ settings, onGo }: { settings: Settings; onGo: (tab: string) => void }) {
+  const profile = useAuthProfile()
   const [injections] = useInjections()
   const [weighIns] = useWeighIns()
-  const [nutrition] = useNutrition()
   const [symptoms] = useSymptoms()
 
   const nd = nextDose(injections, settings)
@@ -31,9 +32,6 @@ export function Home({ settings, onGo }: { settings: Settings; onGo: (tab: strin
   const proj = projectionWeeks(weighIns, settings)
   const current = latestWeight(weighIns, settings)
 
-  const today = todayISO()
-  const todayNut = nutrition.find((n) => n.date === today)
-  const pGoal = proteinGoal(current, settings)
   const adh = adherence(injections, settings)
 
   const recentSymptoms = [...symptoms].sort((a, b) => b.at - a.at).slice(0, 4)
@@ -122,33 +120,7 @@ export function Home({ settings, onGo }: { settings: Settings; onGo: (tab: strin
         </p>
       </Card>
 
-      <Card
-        title="Hoje"
-        right={
-          <button className="link" onClick={() => onGo('nutricao')}>
-            Nutricao &rsaquo;
-          </button>
-        }
-      >
-        <div className="today-line">
-          <span>Proteina</span>
-          <strong>
-            {todayNut?.proteinG ?? 0} / {pGoal} g
-          </strong>
-        </div>
-        <ProgressBar pct={((todayNut?.proteinG ?? 0) / pGoal) * 100} />
-        <div className="today-line">
-          <span>Agua</span>
-          <strong>
-            {((todayNut?.waterMl ?? 0) / 1000).toFixed(1)} / {(settings.waterGoalMl / 1000).toFixed(1)} L
-          </strong>
-        </div>
-        <ProgressBar pct={((todayNut?.waterMl ?? 0) / settings.waterGoalMl) * 100} tone="brand" />
-        <div className="today-line">
-          <span>Refeicoes</span>
-          <strong>{todayNut?.meals ?? 0}</strong>
-        </div>
-      </Card>
+      {(profile.is_admin || profile.nutrition_enabled) && <NutritionSummary settings={settings} weighIns={weighIns} onGo={onGo} />}
 
       <Card
         title="Ultimos sintomas"
@@ -174,5 +146,37 @@ export function Home({ settings, onGo }: { settings: Settings; onGo: (tab: strin
         )}
       </Card>
     </div>
+  )
+}
+
+function NutritionSummary({ settings, weighIns, onGo }: { settings: Settings; weighIns: WeighIn[]; onGo: (tab: string) => void }) {
+  const [nutrition] = useNutrition()
+  const todayNut = nutrition.find((n) => n.date === todayISO())
+  const pGoal = proteinGoal(latestWeight(weighIns, settings), settings)
+
+  return (
+    <Card
+      title="Hoje"
+      right={
+        <button className="link" onClick={() => onGo('nutricao')}>
+          Nutrição &rsaquo;
+        </button>
+      }
+    >
+      <div className="today-line">
+        <span>Proteína</span>
+        <strong>{todayNut?.proteinG ?? 0} / {pGoal} g</strong>
+      </div>
+      <ProgressBar pct={((todayNut?.proteinG ?? 0) / pGoal) * 100} />
+      <div className="today-line">
+        <span>Água</span>
+        <strong>{((todayNut?.waterMl ?? 0) / 1000).toFixed(1)} / {(settings.waterGoalMl / 1000).toFixed(1)} L</strong>
+      </div>
+      <ProgressBar pct={((todayNut?.waterMl ?? 0) / settings.waterGoalMl) * 100} tone="brand" />
+      <div className="today-line">
+        <span>Refeições</span>
+        <strong>{todayNut?.meals ?? 0}</strong>
+      </div>
+    </Card>
   )
 }

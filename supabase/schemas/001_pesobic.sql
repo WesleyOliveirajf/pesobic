@@ -21,6 +21,7 @@ create table public.profiles (
   email text not null,
   full_name text check (full_name is null or char_length(full_name) <= 160),
   access_enabled boolean not null default false,
+  nutrition_enabled boolean not null default false,
   is_admin boolean not null default false,
   height_cm numeric(5, 2) check (height_cm between 50 and 300),
   start_weight_kg numeric(6, 2) check (start_weight_kg between 20 and 500),
@@ -57,6 +58,19 @@ as $$
   select exists (
     select 1 from public.profiles
     where id = (select auth.uid()) and (access_enabled = true or is_admin = true)
+  );
+$$;
+
+create or replace function private.has_nutrition_access()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = (select auth.uid()) and (nutrition_enabled = true or is_admin = true)
   );
 $$;
 
@@ -98,13 +112,34 @@ begin
 end;
 $$;
 
+create or replace function public.admin_set_user_nutrition_access(target_user_id uuid, enabled boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not private.is_admin() then
+    raise exception 'Acesso restrito ao administrador';
+  end if;
+
+  update public.profiles
+  set nutrition_enabled = enabled, updated_at = now()
+  where id = target_user_id and is_admin = false;
+end;
+$$;
+
 revoke all on function private.is_admin() from public, anon;
 revoke all on function private.has_active_access() from public, anon;
+revoke all on function private.has_nutrition_access() from public, anon;
 revoke all on function private.handle_new_user() from public, anon, authenticated;
 revoke all on function public.admin_set_user_access(uuid, boolean) from public, anon;
+revoke all on function public.admin_set_user_nutrition_access(uuid, boolean) from public, anon;
 grant execute on function private.is_admin() to authenticated;
 grant execute on function private.has_active_access() to authenticated;
+grant execute on function private.has_nutrition_access() to authenticated;
 grant execute on function public.admin_set_user_access(uuid, boolean) to authenticated;
+grant execute on function public.admin_set_user_nutrition_access(uuid, boolean) to authenticated;
 grant usage on schema private to authenticated;
 
 create table public.medication_plans (
@@ -376,20 +411,20 @@ using ((select private.has_active_access()) and (select auth.uid()) = user_id);
 
 create policy "nutrition_days_select_own"
 on public.nutrition_days for select to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.has_nutrition_access()) and (select auth.uid()) = user_id);
 
 create policy "nutrition_days_insert_own"
 on public.nutrition_days for insert to authenticated
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+with check ((select private.has_nutrition_access()) and (select auth.uid()) = user_id);
 
 create policy "nutrition_days_update_own"
 on public.nutrition_days for update to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id)
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.has_nutrition_access()) and (select auth.uid()) = user_id)
+with check ((select private.has_nutrition_access()) and (select auth.uid()) = user_id);
 
 create policy "nutrition_days_delete_own"
 on public.nutrition_days for delete to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.has_nutrition_access()) and (select auth.uid()) = user_id);
 
 create policy "progress_photos_select_own"
 on public.progress_photos for select to authenticated

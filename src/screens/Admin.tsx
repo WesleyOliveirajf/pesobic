@@ -13,7 +13,7 @@ export function AdminScreen() {
     if (!supabase) return
     const { data, error: queryError } = await supabase
       .from('profiles')
-      .select('id,email,full_name,access_enabled,is_admin,created_at,updated_at')
+      .select('id,email,full_name,access_enabled,nutrition_enabled,is_admin,created_at,updated_at')
       .order('created_at', { ascending: false })
     if (queryError) setError(queryError.message)
     else {
@@ -42,6 +42,19 @@ export function AdminScreen() {
     })
     if (rpcError) setError(rpcError.message)
     else setPeople((current) => current.map((item) => item.id === person.id ? { ...item, access_enabled: enabled } : item))
+    setChangingId(null)
+  }
+
+  async function changeNutritionAccess(person: AccessProfile, enabled: boolean) {
+    if (!supabase || person.is_admin) return
+    setChangingId(person.id)
+    setError(null)
+    const { error: rpcError } = await supabase.rpc('admin_set_user_nutrition_access', {
+      target_user_id: person.id,
+      enabled,
+    })
+    if (rpcError) setError(rpcError.message)
+    else setPeople((current) => current.map((item) => item.id === person.id ? { ...item, nutrition_enabled: enabled } : item))
     setChangingId(null)
   }
 
@@ -81,11 +94,24 @@ export function AdminScreen() {
                   <span>{person.email}</span>
                   <small>{person.is_admin ? 'Administrador master' : enabled ? 'Acesso liberado' : 'Aguardando liberação'}</small>
                 </div>
-                <label className="access-switch" title={person.is_admin ? 'O administrador master permanece ativo' : undefined}>
-                  <input type="checkbox" checked={enabled} disabled={person.is_admin || changingId === person.id} onChange={(event) => void changeAccess(person, event.target.checked)} />
-                  <span aria-hidden="true" />
-                  <em className="sr-only">{enabled ? 'Desativar acesso' : 'Ativar acesso'} de {person.full_name || person.email}</em>
-                </label>
+                <div className="subscriber-controls">
+                  <label className="subscriber-control" title={person.is_admin ? 'O administrador master permanece ativo' : undefined}>
+                    <span>Acesso</span>
+                    <span className="access-switch">
+                      <input type="checkbox" checked={enabled} disabled={person.is_admin || changingId === person.id} onChange={(event) => void changeAccess(person, event.target.checked)} />
+                      <span aria-hidden="true" />
+                    </span>
+                    <em className="sr-only">{enabled ? 'Desativar acesso' : 'Ativar acesso'} de {person.full_name || person.email}</em>
+                  </label>
+                  <label className="subscriber-control" title={person.is_admin ? 'O administrador master sempre tem acesso à nutrição' : undefined}>
+                    <span>Nutrição</span>
+                    <span className="access-switch">
+                      <input type="checkbox" checked={person.nutrition_enabled || person.is_admin} disabled={person.is_admin || changingId === person.id} onChange={(event) => void changeNutritionAccess(person, event.target.checked)} />
+                      <span aria-hidden="true" />
+                    </span>
+                    <em className="sr-only">{person.nutrition_enabled || person.is_admin ? 'Desativar nutrição' : 'Ativar nutrição'} de {person.full_name || person.email}</em>
+                  </label>
+                </div>
               </article>
             )
           })}
