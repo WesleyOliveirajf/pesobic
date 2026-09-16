@@ -1,5 +1,7 @@
 # Pesobic — Especificação de evolução multiusuário
 
+> **Execução atual:** [`TASKS.md`](./TASKS.md) vence este documento. Porteiro `access_enabled`, fila offline, fotos no Storage e admin de assinante **não** fazem parte da barra de “pronto”.
+
 Status: proposta para execução pelos agentes de desenvolvimento  
 Projeto Supabase: `bcjtfdhxanfevownlewv`  
 Aplicação atual: React 19 + Vite + TypeScript + Dexie/IndexedDB + PWA  

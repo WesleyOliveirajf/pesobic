@@ -1,11 +1,23 @@
 import { createContext, useContext } from 'react'
 
+export const PROFILE_COLUMNS = 'id,email,full_name,blocked,nutrition_enabled,is_admin,created_at,updated_at'
+export const PROFILE_COLUMNS_WITHOUT_NUTRITION = 'id,email,full_name,blocked,is_admin,created_at,updated_at'
+export const LEGACY_PROFILE_COLUMNS = 'id,email,full_name,access_enabled,is_admin,created_at,updated_at'
+
+export function isMissingProfileColumn(error: { message?: string } | null, column: 'blocked' | 'nutrition_enabled') {
+  return Boolean(error?.message?.toLocaleLowerCase('pt-BR').includes(column))
+}
+
 export interface AccessProfile {
   id: string
   email: string
   full_name: string | null
+<<<<<<< HEAD
   access_enabled: boolean
   account_enabled: boolean
+=======
+  blocked: boolean
+>>>>>>> e0402f92057a06f87c12041e62154f19c7cbe5a6
   nutrition_enabled: boolean
   is_admin: boolean
   created_at: string

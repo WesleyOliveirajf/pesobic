@@ -12,6 +12,7 @@ export interface TitrationPhase {
 
 export interface Settings {
   id: 'singleton'
+  planId?: string
   createdAt: number
   onboardedAt: number | null
 
