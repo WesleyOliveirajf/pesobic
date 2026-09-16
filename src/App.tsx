@@ -28,7 +28,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 export default function App() {
   const settings = useSettings()
   const authProfile = useAuthProfile()
-  const hasNutritionAccess = authProfile.is_admin || authProfile.nutrition_enabled
+  const hasNutritionAccess = authProfile.nutrition_enabled
   const tabs = TABS.filter((item) => {
     if (item.id === 'admin') return authProfile.is_admin
     if (item.id === 'nutricao') return hasNutritionAccess

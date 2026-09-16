@@ -6,18 +6,22 @@ import { fmtDateTime } from '../lib/format'
 export function AdminScreen() {
   const [people, setPeople] = useState<AccessProfile[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [changingId, setChangingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
   const loadPeople = useCallback(async () => {
+    setRefreshing(true)
     try {
       setPeople(await listAdminDirectory())
       setError(null)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Falha ao carregar contas.')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-    setLoading(false)
   }, [])
 
   // oxlint-disable-next-line react/set-state-in-effect -- fetch-on-mount, not a derived-state pattern
@@ -43,7 +47,6 @@ export function AdminScreen() {
   }
 
   async function changeNutritionEnabled(person: AccessProfile, enabled: boolean) {
-    if (person.is_admin) return
     setChangingId(person.id)
     setError(null)
     try {
@@ -64,7 +67,9 @@ export function AdminScreen() {
           <h1>Contas</h1>
           <p>Bloqueie abuso e habilite Nutrição por pessoa, sem acessar dados clínicos.</p>
         </div>
-        <button type="button" className="btn btn-plain" onClick={() => void loadPeople()}>Atualizar</button>
+        <button type="button" className="btn btn-plain" disabled={loading || refreshing} onClick={() => void loadPeople()}>
+          {refreshing ? 'Atualizando…' : 'Atualizar'}
+        </button>
       </header>
 
       <div className="admin-stats">
@@ -92,6 +97,7 @@ export function AdminScreen() {
                   {' · '}
                   {fmtDateTime(new Date(person.created_at).getTime())}
                 </small>
+                {person.is_admin && <small>A conta do administrador permanece ativa.</small>}
               </div>
               <div className="subscriber-controls">
                 <label className="subscriber-control" title={person.is_admin ? 'Administrador permanece ativo' : undefined}>
@@ -107,18 +113,18 @@ export function AdminScreen() {
                   </span>
                   <em className="sr-only">{person.blocked ? 'Desbloquear' : 'Bloquear'} {person.full_name || person.email}</em>
                 </label>
-                <label className="subscriber-control" title={person.is_admin ? 'Administrador sempre tem Nutrição' : undefined}>
+                <label className="subscriber-control">
                   <span>Nutrição</span>
                   <span className="access-switch">
                     <input
                       type="checkbox"
-                      checked={person.nutrition_enabled || person.is_admin}
-                      disabled={person.is_admin || changingId === person.id}
+                      checked={person.nutrition_enabled}
+                      disabled={changingId === person.id}
                       onChange={(event) => void changeNutritionEnabled(person, event.target.checked)}
                     />
                     <span aria-hidden="true" />
                   </span>
-                  <em className="sr-only">{person.nutrition_enabled || person.is_admin ? 'Desabilitar Nutrição para' : 'Habilitar Nutrição para'} {person.full_name || person.email}</em>
+                  <em className="sr-only">{person.nutrition_enabled ? 'Desabilitar Nutrição para' : 'Habilitar Nutrição para'} {person.full_name || person.email}</em>
                 </label>
               </div>
             </article>

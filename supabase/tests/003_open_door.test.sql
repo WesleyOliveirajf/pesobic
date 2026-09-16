@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(16);
+select plan(19);
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -128,6 +128,25 @@ select throws_ok(
   'P0001',
   'O administrador nao pode bloquear a propria conta',
   'admin cannot block self'
+);
+
+select throws_ok(
+  $$insert into public.nutrition_days (user_id, tracked_on, protein_g)
+    values ('44444444-4444-4444-8444-444444444444', '2026-09-02', 90)$$,
+  '42501',
+  null,
+  'admin cannot write nutrition without flag'
+);
+
+select lives_ok(
+  $$select public.admin_set_user_nutrition_access('44444444-4444-4444-8444-444444444444', true)$$,
+  'admin can enable nutrition on own account'
+);
+
+select lives_ok(
+  $$insert into public.nutrition_days (user_id, tracked_on, protein_g)
+    values ('44444444-4444-4444-8444-444444444444', '2026-09-02', 90)$$,
+  'admin writes nutrition after enabling flag'
 );
 
 set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';

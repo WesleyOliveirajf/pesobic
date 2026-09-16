@@ -120,7 +120,7 @@ export function Home({ settings, onGo }: { settings: Settings; onGo: (tab: strin
         </p>
       </Card>
 
-      {(profile.is_admin || profile.nutrition_enabled) && <NutritionSummary settings={settings} weighIns={weighIns} onGo={onGo} />}
+      {profile.nutrition_enabled && <NutritionSummary settings={settings} weighIns={weighIns} onGo={onGo} />}
 
       <Card
         title="Ultimos sintomas"

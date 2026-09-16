@@ -73,7 +73,7 @@ as $$
     select 1 from public.profiles
     where id = (select auth.uid())
       and blocked = false
-      and (nutrition_enabled = true or is_admin = true)
+      and nutrition_enabled = true
   );
 $$;
 
@@ -131,7 +131,7 @@ begin
 
   update public.profiles
   set nutrition_enabled = enabled, updated_at = now()
-  where id = target_user_id and is_admin = false;
+  where id = target_user_id;
 end;
 $$;
 
