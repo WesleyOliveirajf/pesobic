@@ -1189,3 +1189,339 @@ select.input {
   padding: 2px 8px;
   font-size: 11px;
 }
+
+/* ---------- App Bar ---------- */
+.app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  min-height: 48px;
+}
+.app-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.app-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+.app-user-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+.app-signout {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* ---------- Pending Page ---------- */
+.pending-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 16px;
+  background: var(--bg);
+}
+.pending-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  width: 100%;
+  max-width: var(--maxw);
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.pending-status {
+  display: inline-block;
+  background: color-mix(in srgb, var(--brand) 15%, transparent);
+  color: var(--brand);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 16px 0;
+}
+.pending-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--surface-2);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  margin: 24px 0;
+  font-size: 13px;
+  text-align: left;
+  color: var(--text-dim);
+}
+
+/* ---------- Admin Screen ---------- */
+.admin-screen {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 16px;
+  padding-bottom: calc(var(--tab-h) + 20px);
+}
+.admin-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.admin-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.admin-stats .stat-card {
+  flex: 1;
+  text-align: center;
+  padding: 12px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.admin-stats .stat-card strong {
+  display: block;
+  font-size: 24px;
+  color: var(--text);
+}
+.admin-stats .stat-card span {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.stat-ok strong { color: var(--ok) !important; }
+.stat-warn strong { color: var(--warn) !important; }
+.admin-search {
+  display: block;
+  margin-bottom: 20px;
+}
+.subscriber-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.subscriber {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.subscriber-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.subscriber-data {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text-dim);
+  min-width: 0;
+}
+.subscriber-data strong {
+  color: var(--text);
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.access-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.access-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.access-switch span {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border);
+  transition: .3s;
+  border-radius: 24px;
+}
+.access-switch span:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+.access-switch input:checked + span {
+  background-color: var(--ok);
+}
+.access-switch input:disabled + span {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.access-switch input:checked + span:before {
+  transform: translateX(20px);
+}
+
+/* ---------- Utility ---------- */
+.error-box {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ---------- Status Badges ---------- */
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.status-badge.status-admin {
+  background: color-mix(in srgb, var(--brand) 15%, transparent);
+  color: var(--brand);
+}
+.status-badge.status-active {
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
+  color: var(--ok);
+}
+.status-badge.status-pending {
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
+  color: var(--warn);
+}
+
+/* ---------- Subscriber Details ---------- */
+.subscriber-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.subscriber-email {
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subscriber-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+/* ---------- Success Box ---------- */
+.success-box {
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
+  color: var(--ok);
+  border: 1px solid var(--ok);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* ---------- Confirm Modal ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 16px;
+}
+.confirm-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+.confirm-card h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.confirm-card p {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-danger:hover {
+  opacity: 0.9;
+}
