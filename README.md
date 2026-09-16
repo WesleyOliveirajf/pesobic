@@ -28,24 +28,27 @@ npm run build     # dist/ com base "/"
 npm run preview   # serve o dist/ localmente
 ```
 
-Para **GitHub Pages de projeto** (`usuario.github.io/pesobic/`), builde com a base certa:
+### Deploy na Vercel
 
-```sh
-# PowerShell
-$env:DEPLOY_BASE='/pesobic/'; npm run build
-```
+A Vercel detecta este projeto Vite e publica automaticamente cada push na branch
+configurada no projeto. O build gera `dist/` com base `/`, adequada ao dominio da
+Vercel. O arquivo [`vercel.json`](./vercel.json) registra essa configuracao e
+mantem o fallback da aplicacao de pagina unica.
 
-Em dominio proprio, Netlify ou Vercel, deixe `DEPLOY_BASE` em branco.
-
-### Deploy no GitHub Pages
-
-O workflow [`deploy.yml`](./.github/workflows/deploy.yml) publica o `dist/` a cada push em `main`.
-Antes do primeiro deploy, em **Settings > Pages**, selecione **GitHub Actions** como fonte de publicacao e crie estes Secrets em **Settings > Secrets and variables > Actions**:
+Antes do proximo deploy, em **Vercel > Project > Settings > Environment Variables**,
+cadastre estas variaveis para os ambientes **Production**, **Preview** e
+**Development**:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-Eles sao injetados somente no build. O arquivo `.env.local` continua exclusivo do desenvolvimento local.
+Elas sao inseridas durante o build da Vercel; por isso nao use o prefixo
+`NEXT_PUBLIC_` e nao as coloque no repositorio. O arquivo `.env.local` continua
+exclusivo do desenvolvimento local.
+
+Tambem inclua o dominio final da Vercel em **Supabase > Authentication > URL
+Configuration** (Site URL e Redirect URLs). Isso permite que confirmacao de e-mail
+e recuperacao de senha retornem para a aplicacao correta.
 
 ## Qualidade
 
