@@ -1,11 +1,30 @@
 // Camada de acesso a dados: le e grava as entidades sincronizaveis direto no Supabase.
-// Fonte oficial dos dados (injections, weigh_ins, symptom_logs, nutrition_days).
+// Fonte oficial dos dados (injections, weigh_ins, symptom_logs, nutrition_days, perfil).
 import { supabase } from './supabase'
-import type { Injection, NutritionDay, SymptomLog, WeighIn } from '../db/types'
+import { asUuid } from './ids'
+import type { AccessProfile } from './auth-context'
+import type { Injection, MedicationKey, NutritionDay, Settings, SymptomLog, TitrationPhase, WeighIn } from '../db/types'
 
 function client() {
   if (!supabase) throw new Error('Supabase nao configurado.')
   return supabase
+}
+
+function isNetworkError(error: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
+  const msg = error instanceof Error ? error.message : String(error)
+  return /Failed to fetch|NetworkError|fetch failed|Load failed|network/i.test(msg)
+}
+
+function rethrow(error: unknown, kind: 'read' | 'write'): never {
+  if (isNetworkError(error)) {
+    throw new Error(
+      kind === 'write'
+        ? 'Sem rede. A escrita nao foi gravada. Tente de novo quando estiver online.'
+        : 'Sem rede. Nao foi possivel atualizar os dados.',
+    )
+  }
+  throw error instanceof Error ? error : new Error(String(error))
 }
 
 // ---------- injections ----------
@@ -42,22 +61,27 @@ export async function listInjections(userId: string): Promise<Injection[]> {
   return (data as InjectionRow[]).map(fromInjectionRow)
 }
 
-export async function addInjection(userId: string, row: Omit<Injection, 'id'>): Promise<Injection> {
-  const { data, error } = await client()
-    .from('injections')
-    .insert({
-      user_id: userId,
-      occurred_at: new Date(row.at).toISOString(),
-      medication: row.medication,
-      dose_mg: row.doseMg,
-      site: row.site,
-      status: row.status,
-      note: row.note ?? null,
-    })
-    .select('id,occurred_at,medication,dose_mg,site,status,note')
-    .single()
-  if (error) throw error
-  return fromInjectionRow(data as InjectionRow)
+export async function addInjection(userId: string, row: Omit<Injection, 'id'> & { id?: string }): Promise<Injection> {
+  try {
+    const { data, error } = await client()
+      .from('injections')
+      .upsert({
+        ...(row.id ? { id: row.id } : {}),
+        user_id: userId,
+        occurred_at: new Date(row.at).toISOString(),
+        medication: row.medication,
+        dose_mg: row.doseMg,
+        site: row.site,
+        status: row.status,
+        note: row.note ?? null,
+      })
+      .select('id,occurred_at,medication,dose_mg,site,status,note')
+      .single()
+    if (error) throw error
+    return fromInjectionRow(data as InjectionRow)
+  } catch (error) {
+    rethrow(error, 'write')
+  }
 }
 
 export async function updateInjection(id: string, patch: Partial<Omit<Injection, 'id'>>): Promise<void> {
@@ -121,10 +145,11 @@ export async function listWeighIns(userId: string): Promise<WeighIn[]> {
   return (data as WeighInRow[]).map(fromWeighInRow)
 }
 
-export async function addWeighIn(userId: string, row: Omit<WeighIn, 'id'>): Promise<WeighIn> {
+export async function addWeighIn(userId: string, row: Omit<WeighIn, 'id'> & { id?: string }): Promise<WeighIn> {
   const { data, error } = await client()
     .from('weigh_ins')
-    .insert({
+    .upsert({
+      ...(row.id ? { id: row.id } : {}),
       user_id: userId,
       measured_on: row.date,
       measured_at: new Date(row.at).toISOString(),
@@ -139,7 +164,7 @@ export async function addWeighIn(userId: string, row: Omit<WeighIn, 'id'>): Prom
     })
     .select(WEIGH_IN_COLUMNS)
     .single()
-  if (error) throw error
+  if (error) rethrow(error, 'write')
   return fromWeighInRow(data as WeighInRow)
 }
 
@@ -194,10 +219,11 @@ export async function listSymptomLogs(userId: string): Promise<SymptomLog[]> {
   return (data as SymptomLogRow[]).map(fromSymptomLogRow)
 }
 
-export async function addSymptomLog(userId: string, row: Omit<SymptomLog, 'id'>): Promise<SymptomLog> {
+export async function addSymptomLog(userId: string, row: Omit<SymptomLog, 'id'> & { id?: string }): Promise<SymptomLog> {
   const { data, error } = await client()
     .from('symptom_logs')
-    .insert({
+    .upsert({
+      ...(row.id ? { id: row.id } : {}),
       user_id: userId,
       occurred_at: new Date(row.at).toISOString(),
       symptom: row.symptom,
@@ -206,7 +232,7 @@ export async function addSymptomLog(userId: string, row: Omit<SymptomLog, 'id'>)
     })
     .select('id,occurred_at,symptom,severity,note')
     .single()
-  if (error) throw error
+  if (error) rethrow(error, 'write')
   return fromSymptomLogRow(data as SymptomLogRow)
 }
 
@@ -280,7 +306,7 @@ export async function upsertNutritionDay(
     )
     .select(NUTRITION_COLUMNS)
     .single()
-  if (error) throw error
+  if (error) rethrow(error, 'write')
   return fromNutritionDayRow(data as NutritionDayRow)
 }
 
@@ -303,10 +329,217 @@ export async function deleteNutritionDay(id: string): Promise<void> {
 
 export async function wipeAllForUser(userId: string): Promise<void> {
   const c = client()
-  await Promise.all([
-    c.from('injections').delete().eq('user_id', userId),
-    c.from('weigh_ins').delete().eq('user_id', userId),
-    c.from('symptom_logs').delete().eq('user_id', userId),
-    c.from('nutrition_days').delete().eq('user_id', userId),
-  ])
+  try {
+    const results = await Promise.all([
+      c.from('injections').delete().eq('user_id', userId),
+      c.from('weigh_ins').delete().eq('user_id', userId),
+      c.from('symptom_logs').delete().eq('user_id', userId),
+      c.from('nutrition_days').delete().eq('user_id', userId),
+      c.from('medication_plans').delete().eq('user_id', userId),
+    ])
+    const firstError = results.find((result) => result.error)?.error
+    if (firstError) throw firstError
+  } catch (error) {
+    rethrow(error, 'write')
+  }
+}
+
+const PROFILE_CLINICAL =
+  'id,email,full_name,height_cm,start_weight_kg,start_date,goal_weight_kg,protein_factor,protein_manual_goal,water_goal_ml,timezone,created_at,updated_at'
+
+interface ProfileRow {
+  id: string
+  email: string
+  full_name: string | null
+  height_cm: number | null
+  start_weight_kg: number | null
+  start_date: string | null
+  goal_weight_kg: number | null
+  protein_factor: number
+  protein_manual_goal: number | null
+  water_goal_ml: number
+  timezone: string
+  created_at: string
+  updated_at: string
+}
+
+interface PlanRow {
+  id: string
+  medication: MedicationKey
+  medication_label: string | null
+  reminder_weekday: number | null
+  reminder_time: string
+  reminder_start_date: string
+  current_phase_index: number
+}
+
+interface PhaseRow {
+  id: string
+  position: number
+  dose_mg: number
+  weeks: number
+  label: string | null
+}
+
+function asTime(value: string): string {
+  return value.slice(0, 5)
+}
+
+export async function loadAccountSettings(userId: string): Promise<Settings | null> {
+  try {
+    const { data: profile, error: profileError } = await client()
+      .from('profiles')
+      .select(PROFILE_CLINICAL)
+      .eq('id', userId)
+      .single()
+    if (profileError) throw profileError
+    const row = profile as ProfileRow
+    if (!row.height_cm || !row.start_weight_kg || !row.start_date || !row.goal_weight_kg) return null
+
+    const { data: plan, error: planError } = await client()
+      .from('medication_plans')
+      .select('id,medication,medication_label,reminder_weekday,reminder_time,reminder_start_date,current_phase_index')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (planError) throw planError
+    if (!plan) return null
+    const planRow = plan as PlanRow
+
+    const { data: phases, error: phaseError } = await client()
+      .from('titration_phases')
+      .select('id,position,dose_mg,weeks,label')
+      .eq('plan_id', planRow.id)
+      .order('position', { ascending: true })
+    if (phaseError) throw phaseError
+
+    return {
+      id: 'singleton',
+      planId: planRow.id,
+      createdAt: new Date(row.created_at).getTime(),
+      onboardedAt: new Date(row.updated_at).getTime(),
+      heightCm: Number(row.height_cm),
+      startWeightKg: Number(row.start_weight_kg),
+      startDate: row.start_date,
+      goalWeightKg: Number(row.goal_weight_kg),
+      medication: planRow.medication,
+      medicationLabel: planRow.medication_label ?? '',
+      proteinFactor: Number(row.protein_factor),
+      proteinManualGoal: row.protein_manual_goal === null ? null : Number(row.protein_manual_goal),
+      waterGoalMl: row.water_goal_ml,
+      reminderWeekday: planRow.reminder_weekday ?? 0,
+      reminderTime: asTime(planRow.reminder_time),
+      reminderStartDate: planRow.reminder_start_date,
+      phases: ((phases ?? []) as PhaseRow[]).map((phase) => ({
+        id: phase.id,
+        doseMg: Number(phase.dose_mg),
+        weeks: phase.weeks,
+        label: phase.label ?? undefined,
+      })),
+      currentPhaseIndex: planRow.current_phase_index,
+      lastExportAt: null,
+    }
+  } catch (error) {
+    rethrow(error, 'read')
+  }
+}
+
+export async function saveAccountSettings(userId: string, settings: Settings): Promise<Settings> {
+  try {
+    const planId = settings.planId && settings.planId.length > 0 ? asUuid(settings.planId) : crypto.randomUUID()
+    const phases: TitrationPhase[] = settings.phases.map((phase) => ({
+      ...phase,
+      id: asUuid(phase.id),
+    }))
+
+    const { error: profileError } = await client()
+      .from('profiles')
+      .update({
+        height_cm: settings.heightCm,
+        start_weight_kg: settings.startWeightKg,
+        start_date: settings.startDate,
+        goal_weight_kg: settings.goalWeightKg,
+        protein_factor: settings.proteinFactor,
+        protein_manual_goal: settings.proteinManualGoal,
+        water_goal_ml: settings.waterGoalMl,
+      })
+      .eq('id', userId)
+    if (profileError) throw profileError
+
+    const { error: planError } = await client()
+      .from('medication_plans')
+      .upsert({
+        id: planId,
+        user_id: userId,
+        medication: settings.medication,
+        medication_label: settings.medicationLabel || null,
+        reminder_weekday: settings.reminderWeekday,
+        reminder_time: settings.reminderTime,
+        reminder_start_date: settings.reminderStartDate,
+        current_phase_index: settings.currentPhaseIndex,
+      })
+    if (planError) throw planError
+
+    const { data: existing, error: existingError } = await client()
+      .from('titration_phases')
+      .select('id')
+      .eq('plan_id', planId)
+    if (existingError) throw existingError
+    const keep = new Set(phases.map((phase) => phase.id))
+    const stale = ((existing ?? []) as { id: string }[]).filter((row) => !keep.has(row.id)).map((row) => row.id)
+    if (stale.length) {
+      const { error: deleteError } = await client().from('titration_phases').delete().in('id', stale)
+      if (deleteError) throw deleteError
+    }
+
+    if (phases.length) {
+      const { error: phaseError } = await client()
+        .from('titration_phases')
+        .upsert(
+          phases.map((phase, position) => ({
+            id: phase.id,
+            user_id: userId,
+            plan_id: planId,
+            position,
+            dose_mg: phase.doseMg,
+            weeks: phase.weeks,
+            label: phase.label ?? null,
+          })),
+        )
+      if (phaseError) throw phaseError
+    }
+
+    return { ...settings, planId, phases }
+  } catch (error) {
+    rethrow(error, 'write')
+  }
+}
+
+export async function listAdminDirectory(): Promise<AccessProfile[]> {
+  const { data, error } = await client()
+    .from('admin_directory')
+    .select('id,email,full_name,blocked,nutrition_enabled,is_admin,created_at,updated_at')
+    .order('created_at', { ascending: false })
+  if (error) rethrow(error, 'read')
+  return (data ?? []) as AccessProfile[]
+}
+
+export async function setUserBlocked(targetUserId: string, isBlocked: boolean): Promise<void> {
+  const { error } = await client().rpc('admin_set_user_blocked', {
+    target_user_id: targetUserId,
+    is_blocked: isBlocked,
+  })
+  if (error) rethrow(error, 'write')
+}
+
+export async function setUserNutritionEnabled(targetUserId: string, enabled: boolean): Promise<void> {
+  const { error } = await client().rpc('admin_set_user_nutrition_access', {
+    target_user_id: targetUserId,
+    enabled,
+  })
+  if (error) rethrow(error, 'write')
+}
+
+export async function deleteOwnAccount(): Promise<void> {
+  const { error } = await client().rpc('delete_own_account')
+  if (error) rethrow(error, 'write')
 }

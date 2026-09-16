@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { isMissingNutritionEnabledColumn } from './auth-context'
+import { isMissingProfileColumn } from './auth-context'
 
-describe('isMissingNutritionEnabledColumn', () => {
+describe('isMissingProfileColumn', () => {
   it('reconhece a ausência da coluna de nutrição no schema remoto', () => {
-    expect(isMissingNutritionEnabledColumn({ message: 'column profiles.nutrition_enabled does not exist' })).toBe(true)
+    expect(isMissingProfileColumn({ message: 'column profiles.nutrition_enabled does not exist' }, 'nutrition_enabled')).toBe(true)
   })
 
-  it('não esconde outros erros de perfil', () => {
-    expect(isMissingNutritionEnabledColumn({ message: 'permission denied for table profiles' })).toBe(false)
+  it('reconhece o schema anterior sem bloqueio e não esconde outros erros', () => {
+    expect(isMissingProfileColumn({ message: 'column profiles.blocked does not exist' }, 'blocked')).toBe(true)
+    expect(isMissingProfileColumn({ message: 'permission denied for table profiles' }, 'blocked')).toBe(false)
   })
 })

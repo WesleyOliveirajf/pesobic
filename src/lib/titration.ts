@@ -1,10 +1,8 @@
 import type { MedicationKey, Settings, TitrationPhase } from '../db/types'
 import { addDays, daysBetween, todayISO } from './format'
 
-let seq = 0
 function pid(): string {
-  seq += 1
-  return `ph_${Date.now().toString(36)}_${seq}`
+  return crypto.randomUUID()
 }
 
 export function phase(doseMg: number, weeks: number, label?: string): TitrationPhase {

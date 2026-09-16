@@ -22,6 +22,7 @@ create table public.profiles (
   full_name text check (full_name is null or char_length(full_name) <= 160),
   access_enabled boolean not null default false,
   nutrition_enabled boolean not null default false,
+  blocked boolean not null default false,
   is_admin boolean not null default false,
   height_cm numeric(5, 2) check (height_cm between 50 and 300),
   start_weight_kg numeric(6, 2) check (start_weight_kg between 20 and 500),
@@ -48,7 +49,7 @@ as $$
   );
 $$;
 
-create or replace function private.has_active_access()
+create or replace function private.is_not_blocked()
 returns boolean
 language sql
 stable
@@ -57,7 +58,7 @@ set search_path = ''
 as $$
   select exists (
     select 1 from public.profiles
-    where id = (select auth.uid()) and (access_enabled = true or is_admin = true)
+    where id = (select auth.uid()) and blocked = false
   );
 $$;
 
@@ -70,7 +71,9 @@ set search_path = ''
 as $$
   select exists (
     select 1 from public.profiles
-    where id = (select auth.uid()) and (nutrition_enabled = true or is_admin = true)
+    where id = (select auth.uid())
+      and blocked = false
+      and (nutrition_enabled = true or is_admin = true)
   );
 $$;
 
@@ -91,7 +94,10 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function private.handle_new_user();
 
-create or replace function public.admin_set_user_access(target_user_id uuid, enabled boolean)
+-- Primeiro admin (out-of-band, local/homologacao). NAO rodar no remoto sem ordem no chat:
+--   update public.profiles set is_admin = true where id = '<uuid-do-operador>';
+
+create or replace function public.admin_set_user_blocked(target_user_id uuid, is_blocked boolean)
 returns void
 language plpgsql
 security definer
@@ -103,11 +109,11 @@ begin
   end if;
 
   if target_user_id = (select auth.uid()) then
-    raise exception 'O administrador nao pode bloquear o proprio acesso';
+    raise exception 'O administrador nao pode bloquear a propria conta';
   end if;
 
   update public.profiles
-  set access_enabled = enabled, updated_at = now()
+  set blocked = is_blocked, updated_at = now()
   where id = target_user_id and is_admin = false;
 end;
 $$;
@@ -129,17 +135,46 @@ begin
 end;
 $$;
 
+create or replace function private.delete_own_account()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  uid uuid := (select auth.uid());
+begin
+  if uid is null then
+    raise exception 'Nao autenticado';
+  end if;
+  delete from auth.users where id = uid;
+end;
+$$;
+
+create or replace function public.delete_own_account()
+returns void
+language sql
+security invoker
+set search_path = ''
+as $$
+  select private.delete_own_account();
+$$;
+
 revoke all on function private.is_admin() from public, anon;
-revoke all on function private.has_active_access() from public, anon;
+revoke all on function private.is_not_blocked() from public, anon;
 revoke all on function private.has_nutrition_access() from public, anon;
 revoke all on function private.handle_new_user() from public, anon, authenticated;
-revoke all on function public.admin_set_user_access(uuid, boolean) from public, anon;
+revoke all on function private.delete_own_account() from public, anon, authenticated;
+revoke all on function public.admin_set_user_blocked(uuid, boolean) from public, anon;
 revoke all on function public.admin_set_user_nutrition_access(uuid, boolean) from public, anon;
+revoke all on function public.delete_own_account() from public, anon;
 grant execute on function private.is_admin() to authenticated;
-grant execute on function private.has_active_access() to authenticated;
+grant execute on function private.is_not_blocked() to authenticated;
 grant execute on function private.has_nutrition_access() to authenticated;
-grant execute on function public.admin_set_user_access(uuid, boolean) to authenticated;
+grant execute on function private.delete_own_account() to authenticated;
+grant execute on function public.admin_set_user_blocked(uuid, boolean) to authenticated;
 grant execute on function public.admin_set_user_nutrition_access(uuid, boolean) to authenticated;
+grant execute on function public.delete_own_account() to authenticated;
 grant usage on schema private to authenticated;
 
 create table public.medication_plans (
@@ -248,6 +283,12 @@ create table public.progress_photos (
   check (storage_path like user_id::text || '/%')
 );
 
+create view public.admin_directory
+with (security_invoker = false, security_barrier = true) as
+select id, email, full_name, blocked, nutrition_enabled, is_admin, created_at, updated_at
+from public.profiles
+where (select private.is_admin());
+
 create index titration_phases_user_id_idx on public.titration_phases (user_id);
 create index titration_phases_plan_id_user_id_idx on public.titration_phases (plan_id, user_id);
 create index injections_user_id_occurred_at_idx on public.injections (user_id, occurred_at desc);
@@ -307,8 +348,9 @@ revoke all on table
   public.progress_photos
 from anon, authenticated;
 
+revoke all on public.admin_directory from public, anon, authenticated;
+
 grant select, insert, update, delete on table
-  public.profiles,
   public.medication_plans,
   public.titration_phases,
   public.injections,
@@ -318,96 +360,113 @@ grant select, insert, update, delete on table
   public.progress_photos
 to authenticated;
 
-revoke insert, update, delete on table public.profiles from authenticated;
+grant select on table public.profiles to authenticated;
+grant update (
+  full_name,
+  height_cm,
+  start_weight_kg,
+  start_date,
+  goal_weight_kg,
+  protein_factor,
+  protein_manual_goal,
+  water_goal_ml,
+  timezone
+) on table public.profiles to authenticated;
+grant select on public.admin_directory to authenticated;
 
-create policy "profiles_select_own_or_admin"
+create policy "profiles_select_own"
 on public.profiles for select to authenticated
-using ((select auth.uid()) = id or (select private.is_admin()));
+using ((select auth.uid()) = id);
+
+create policy "profiles_update_own"
+on public.profiles for update to authenticated
+using ((select auth.uid()) = id and (select private.is_not_blocked()))
+with check ((select auth.uid()) = id and (select private.is_not_blocked()));
 
 create policy "medication_plans_select_own"
 on public.medication_plans for select to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "medication_plans_insert_own"
 on public.medication_plans for insert to authenticated
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "medication_plans_update_own"
 on public.medication_plans for update to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id)
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id)
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "medication_plans_delete_own"
 on public.medication_plans for delete to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "titration_phases_select_own"
 on public.titration_phases for select to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "titration_phases_insert_own"
 on public.titration_phases for insert to authenticated
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "titration_phases_update_own"
 on public.titration_phases for update to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id)
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id)
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "titration_phases_delete_own"
 on public.titration_phases for delete to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "injections_select_own"
 on public.injections for select to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "injections_insert_own"
 on public.injections for insert to authenticated
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "injections_update_own"
 on public.injections for update to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id)
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id)
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "injections_delete_own"
 on public.injections for delete to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "weigh_ins_select_own"
 on public.weigh_ins for select to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "weigh_ins_insert_own"
 on public.weigh_ins for insert to authenticated
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "weigh_ins_update_own"
 on public.weigh_ins for update to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id)
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id)
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "weigh_ins_delete_own"
 on public.weigh_ins for delete to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "symptom_logs_select_own"
 on public.symptom_logs for select to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "symptom_logs_insert_own"
 on public.symptom_logs for insert to authenticated
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "symptom_logs_update_own"
 on public.symptom_logs for update to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id)
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id)
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "symptom_logs_delete_own"
 on public.symptom_logs for delete to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "nutrition_days_select_own"
 on public.nutrition_days for select to authenticated
@@ -428,17 +487,17 @@ using ((select private.has_nutrition_access()) and (select auth.uid()) = user_id
 
 create policy "progress_photos_select_own"
 on public.progress_photos for select to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "progress_photos_insert_own"
 on public.progress_photos for insert to authenticated
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "progress_photos_update_own"
 on public.progress_photos for update to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id)
-with check ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id)
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "progress_photos_delete_own"
 on public.progress_photos for delete to authenticated
-using ((select private.has_active_access()) and (select auth.uid()) = user_id);
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);

@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { patchSettings, wipeAll } from '../db/db'
+import { wipeAll } from '../db/db'
+import { persistSettings } from '../hooks'
 import * as repo from '../lib/repo'
 import { useAuthProfile } from '../lib/auth-context'
+import { supabase } from '../lib/supabase'
+import { supportContact } from '../lib/support'
 import type { MedicationKey, Settings } from '../db/types'
 import {
   Btn,
   Card,
-  ConfirmButton,
   Field,
   NumberInput,
   Select,
@@ -37,27 +39,63 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
   })
   const [msg, setMsg] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [closeText, setCloseText] = useState('')
+  const [closePassword, setClosePassword] = useState('')
+  const [closing, setClosing] = useState(false)
 
   function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) {
     setF((prev) => ({ ...prev, [k]: v }))
   }
 
   async function save() {
-    await patchSettings({
-      heightCm: f.heightCm ?? settings.heightCm,
-      startWeightKg: f.startWeightKg ?? settings.startWeightKg,
-      goalWeightKg: f.goalWeightKg ?? settings.goalWeightKg,
-      startDate: f.startDate,
-      medication: f.medication,
-      medicationLabel: f.medicationLabel.trim(),
-      proteinFactor: f.proteinFactor ?? settings.proteinFactor,
-      proteinManualGoal: f.proteinManualGoal && f.proteinManualGoal > 0 ? f.proteinManualGoal : null,
-      waterGoalMl: f.waterGoalMl ?? settings.waterGoalMl,
-      reminderWeekday: f.reminderWeekday,
-      reminderTime: f.reminderTime,
-      reminderStartDate: f.reminderStartDate,
-    })
-    setSavedAt(Date.now())
+    setMsg(null)
+    try {
+      await persistSettings(profile.id, {
+        ...settings,
+        heightCm: f.heightCm ?? settings.heightCm,
+        startWeightKg: f.startWeightKg ?? settings.startWeightKg,
+        goalWeightKg: f.goalWeightKg ?? settings.goalWeightKg,
+        startDate: f.startDate,
+        medication: f.medication,
+        medicationLabel: f.medicationLabel.trim(),
+        proteinFactor: f.proteinFactor ?? settings.proteinFactor,
+        proteinManualGoal: f.proteinManualGoal && f.proteinManualGoal > 0 ? f.proteinManualGoal : null,
+        waterGoalMl: f.waterGoalMl ?? settings.waterGoalMl,
+        reminderWeekday: f.reminderWeekday,
+        reminderTime: f.reminderTime,
+        reminderStartDate: f.reminderStartDate,
+      })
+      setSavedAt(Date.now())
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Falha ao salvar.')
+    }
+  }
+
+  async function closeAccount() {
+    if (closeText.trim().toUpperCase() !== 'ENCERRAR') {
+      setMsg('Digite ENCERRAR para confirmar.')
+      return
+    }
+    if (!supabase) {
+      setMsg('Supabase nao configurado.')
+      return
+    }
+    setClosing(true)
+    setMsg(null)
+    try {
+      await exportBackup(profile.id)
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: closePassword,
+      })
+      if (authError) throw new Error('Confirme a senha para encerrar a conta.')
+      await repo.deleteOwnAccount()
+      await wipeAll()
+      await supabase.auth.signOut()
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Nao foi possivel encerrar a conta.')
+      setClosing(false)
+    }
   }
 
   const isDaily = cadenceDays(f.medication) === 1
@@ -187,10 +225,20 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
       </Btn>
       {savedAt && <p className="muted-small center">Salvo {fmtDateTime(savedAt)}.</p>}
 
+      <Card title="Conta">
+        <p className="muted-small">
+          A conta na nuvem e a copia oficial. Este aparelho guarda um cache de leitura e as fotos
+          locais. Suporte: {supportContact()}.
+        </p>
+        <div className="btn-row wrap">
+          <Btn variant="ghost" onClick={() => supabase?.auth.signOut()}>Sair</Btn>
+        </div>
+      </Card>
+
       <Card title="Backup dos dados">
         <p className="muted-small">
-          Aplicacoes, pesagens, sintomas e nutricao ficam salvos na sua conta (sincronizados). Exporte
-          tambem um backup local por seguranca.
+          Exporte um JSON extra se quiser uma copia local. Encerrar a conta tambem gera este arquivo
+          antes de apagar.
           {settings.lastExportAt
             ? ` Ultimo export: ${fmtDateTime(settings.lastExportAt)}.`
             : ' Nenhum export feito ainda.'}
@@ -230,23 +278,26 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
         <p className="muted-small">Fotos de progresso tem export proprio na aba Peso.</p>
       </Card>
 
-      <Card title="Zona de risco">
-        <p className="muted-small">Apaga perfil, cronograma e todos os registros salvos na sua conta. Sem volta.</p>
-        <ConfirmButton
-          confirmLabel="Apagar tudo mesmo?"
-          onConfirm={async () => {
-            await repo.wipeAllForUser(profile.id)
-            await wipeAll()
-            location.reload()
-          }}
-        >
-          Apagar todos os dados
-        </ConfirmButton>
+      <Card title="Encerrar conta">
+        <p className="muted-small">
+          Diferente de Sair: apaga a conta, o perfil e os registros na hora. Sem quarentena.
+          Confirme a senha e digite ENCERRAR. Um backup JSON e baixado antes.
+        </p>
+        <Field label="Senha">
+          <TextInput type="password" value={closePassword} onChange={(e) => setClosePassword(e.target.value)} autoComplete="current-password" />
+        </Field>
+        <Field label='Digite ENCERRAR'>
+          <TextInput value={closeText} onChange={(e) => setCloseText(e.target.value)} placeholder="ENCERRAR" />
+        </Field>
+        <Btn variant="danger" block disabled={closing} onClick={() => void closeAccount()}>
+          {closing ? 'Encerrando…' : 'Encerrar conta'}
+        </Btn>
       </Card>
 
       <p className="disclaimer center">
-        Pesobic v1 — ferramenta pessoal de registro. Nao prescreve dose, nao da diagnostico e nao
-        substitui acompanhamento profissional. As decisoes sobre a medicacao sao suas.
+        Pesobic — ferramenta pessoal de registro. A conta e a copia oficial. Nao prescreve dose, nao
+        da diagnostico e nao substitui acompanhamento profissional. As decisoes sobre a medicacao sao
+        suas.
       </p>
     </div>
   )

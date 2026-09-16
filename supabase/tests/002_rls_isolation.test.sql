@@ -17,9 +17,6 @@ insert into auth.users (
     'usuario-b@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()
   );
 
-update public.profiles
-set access_enabled = true;
-
 insert into public.weigh_ins (id, user_id, measured_on, weight_kg) values
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', '2026-09-01', 95),
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-2222-4222-8222-222222222222', '2026-09-01', 85);

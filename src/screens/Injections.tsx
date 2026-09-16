@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { patchSettings } from '../db/db'
 import * as repo from '../lib/repo'
+import { persistSettings, useInjections } from '../hooks'
 import { useAuthProfile } from '../lib/auth-context'
 import type { Injection, InjectionSite, MedicationKey, Settings, TitrationPhase } from '../db/types'
 import {
@@ -14,7 +14,6 @@ import {
   Select,
   TextInput,
 } from '../components/ui'
-import { useInjections } from '../hooks'
 import {
   MEDICATIONS,
   SITE_LABEL,
@@ -34,10 +33,12 @@ import {
 } from '../lib/titration'
 
 export function Injections({ settings }: { settings: Settings }) {
+  const profile = useAuthProfile()
   const [injections, reloadInjections] = useInjections()
   const [showAdd, setShowAdd] = useState<null | 'aplicada' | 'pulada'>(null)
   const [editPhases, setEditPhases] = useState(false)
   const [editRow, setEditRow] = useState<Injection | null>(null)
+  const [phaseErr, setPhaseErr] = useState<string | null>(null)
 
   const applied = useMemo(
     () => injections.filter((i) => i.status === 'aplicada').sort((a, b) => b.at - a.at),
@@ -53,7 +54,12 @@ export function Injections({ settings }: { settings: Settings }) {
 
   async function movePhase(delta: number) {
     const next = Math.max(0, Math.min(settings.phases.length - 1, settings.currentPhaseIndex + delta))
-    await patchSettings({ currentPhaseIndex: next })
+    try {
+      await persistSettings(profile.id, { ...settings, currentPhaseIndex: next })
+      setPhaseErr(null)
+    } catch (e) {
+      setPhaseErr(e instanceof Error ? e.message : 'Falha ao salvar a fase.')
+    }
   }
 
   const history = [...injections].sort((a, b) => b.at - a.at)
@@ -92,6 +98,7 @@ export function Injections({ settings }: { settings: Settings }) {
         <p className="muted-small">
           Cadencia {cadenceDays(settings.medication) === 1 ? 'diaria' : 'semanal'} &middot; aderencia {num(adh.pct, 0)}% ({adh.applied}/{adh.expected}) &middot; {adh.skipped} puladas
         </p>
+        {phaseErr && <p className="error-box">{phaseErr}</p>}
       </Card>
 
       <Card
@@ -353,6 +360,8 @@ function EditInjectionModal({
 }
 
 function EditPhasesModal({ settings, onClose }: { settings: Settings; onClose: () => void }) {
+  const profile = useAuthProfile()
+  const [err, setErr] = useState<string | null>(null)
   const [phases, setPhases] = useState<TitrationPhase[]>(settings.phases.map((p) => ({ ...p })))
   const [tpl, setTpl] = useState<MedicationKey | ''>('')
 
@@ -374,8 +383,12 @@ function EditPhasesModal({ settings, onClose }: { settings: Settings; onClose: (
   async function save() {
     const clean = phases.filter((p) => p.doseMg >= 0)
     const idx = Math.min(settings.currentPhaseIndex, Math.max(0, clean.length - 1))
-    await patchSettings({ phases: clean, currentPhaseIndex: idx })
-    onClose()
+    try {
+      await persistSettings(profile.id, { ...settings, phases: clean, currentPhaseIndex: idx })
+      onClose()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
+    }
   }
 
   return (
@@ -431,6 +444,7 @@ function EditPhasesModal({ settings, onClose }: { settings: Settings; onClose: (
         + Adicionar fase
       </Btn>
       <p className="disclaimer">Inicio do cronograma: {fmtDate(settings.startDate)} (data de inicio no perfil).</p>
+      {err && <p className="error-box">{err}</p>}
       <Btn variant="primary" block onClick={save}>
         Salvar cronograma
       </Btn>

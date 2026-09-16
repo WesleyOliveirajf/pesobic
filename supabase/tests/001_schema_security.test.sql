@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(29);
+select plan(34);
 
 select has_table('public', 'profiles', 'profiles exists');
 select has_column('public', 'profiles', 'nutrition_enabled', 'profiles controls nutrition access');
@@ -50,8 +50,13 @@ select ok(
 select is(
   (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'profiles'),
   2,
-  'profiles exposes only own profile and the admin listing'
+  'profiles exposes own select and own update only'
 );
+select has_view('public', 'admin_directory', 'admin_directory exists');
+select hasnt_column('public', 'admin_directory', 'start_weight_kg', 'admin directory hides clinical weight');
+select hasnt_column('public', 'admin_directory', 'height_cm', 'admin directory hides height');
+select col_not_null('public', 'profiles', 'blocked');
+select has_column('public', 'profiles', 'access_enabled', 'campo de acesso legado preservado');
 select is(
   (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'medication_plans'),
   4,
