@@ -35,20 +35,20 @@ configurada no projeto. O build gera `dist/` com base `/`, adequada ao dominio d
 Vercel. O arquivo [`vercel.json`](./vercel.json) registra essa configuracao e
 mantem o fallback da aplicacao de pagina unica.
 
-Antes do proximo deploy, em **Vercel > Project > Settings > Environment Variables**,
-cadastre estas variaveis para os ambientes **Production**, **Preview** e
-**Development**:
+O Vite embute `VITE_*` no JavaScript **durante o build**. Sem essas duas
+variaveis o login mostra "Configure as variaveis do Supabase".
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-Elas sao inseridas durante o build da Vercel; por isso nao use o prefixo
-`NEXT_PUBLIC_` e nao as coloque no repositorio. O arquivo `.env.local` continua
-exclusivo do desenvolvimento local.
+A chave publicavel e a URL ja vao em [`.env.production`](./.env.production) (so
+valores de cliente; nunca `service_role`). O build da Vercel le esse arquivo.
+Variaveis no dashboard da Vercel, se existirem, tem prioridade. `.env.local`
+continua so para desenvolvimento local.
 
-Tambem inclua o dominio final da Vercel em **Supabase > Authentication > URL
+Inclua `https://pesobic.vercel.app` em **Supabase > Authentication > URL
 Configuration** (Site URL e Redirect URLs). Isso permite que confirmacao de e-mail
-e recuperacao de senha retornem para a aplicacao correta.
+e recuperacao de senha voltem para o app.
 
 ## Qualidade
 
