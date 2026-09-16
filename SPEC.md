@@ -1,5 +1,7 @@
 # Pesobic — Especificacao
 
+> **Execução atual:** produto travado e backlog dos agentes estão em [`TASKS.md`](./TASKS.md). As decisões desta página (“um usuário, sem login, só no aparelho”) estão **revogadas**.
+
 Ferramenta pessoal (usuario unico) para acompanhar o processo de emagrecimento com
 canetas GLP-1: aplicacoes, dose/titulacao, peso e medidas, sintomas e proteina.
 

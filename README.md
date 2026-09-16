@@ -1,8 +1,10 @@
 # Pesobic
 
-PWA pessoal para acompanhar o emagrecimento com canetas GLP-1: aplicacoes, dose e
-titulacao, peso e medidas, sintomas e proteina. Roda no iPhone (Safari > Adicionar a
-Tela de Inicio), funciona offline e guarda tudo **so no aparelho**.
+PWA para acompanhar o emagrecimento com canetas GLP-1: aplicacoes, dose e
+titulacao, peso e medidas, sintomas e proteina. Conta na nuvem (Supabase);
+o aparelho e cache. Recorte Brasil, pt-BR.
+
+Barra de produto e tasks dos agentes: [`TASKS.md`](./TASKS.md).
 
 > Nao prescreve dose, nao da diagnostico e nao substitui acompanhamento profissional.
 
