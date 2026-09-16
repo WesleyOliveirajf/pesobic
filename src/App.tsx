@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useSettings } from './hooks'
 import { Onboarding } from './screens/Onboarding'
 import { Home } from './screens/Home'
-import { Injections } from './screens/Injections'
-import { Weight } from './screens/Weight'
-import { Symptoms } from './screens/Symptoms'
-import { Nutrition } from './screens/Nutrition'
-import { SettingsScreen } from './screens/Settings'
 import { supabase } from './lib/supabase'
 import { useAuthProfile } from './lib/auth-context'
-import { AdminScreen } from './screens/Admin'
+
+const Injections = lazy(() => import('./screens/Injections').then((m) => ({ default: m.Injections })))
+const Weight = lazy(() => import('./screens/Weight').then((m) => ({ default: m.Weight })))
+const Symptoms = lazy(() => import('./screens/Symptoms').then((m) => ({ default: m.Symptoms })))
+const Nutrition = lazy(() => import('./screens/Nutrition').then((m) => ({ default: m.Nutrition })))
+const SettingsScreen = lazy(() => import('./screens/Settings').then((m) => ({ default: m.SettingsScreen })))
+const AdminScreen = lazy(() => import('./screens/Admin').then((m) => ({ default: m.AdminScreen })))
 import { migrateLegacyToAccount, peekLegacyData, skipMigration, wasMigrated, type LegacyPeek } from './lib/legacy-migrate'
 import { Btn } from './components/ui'
 
@@ -143,13 +144,15 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {activeTab === 'inicio' && <Home settings={settings} onGo={go} />}
-        {activeTab === 'caneta' && <Injections settings={settings} />}
-        {activeTab === 'peso' && <Weight settings={settings} />}
-        {activeTab === 'sintomas' && <Symptoms settings={settings} />}
-        {activeTab === 'nutricao' && hasNutritionAccess && <Nutrition settings={settings} />}
-        {activeTab === 'config' && <SettingsScreen settings={settings} />}
-        {activeTab === 'admin' && authProfile.is_admin && <AdminScreen />}
+        <Suspense fallback={<div className="screen-loading" aria-busy="true" />}>
+          {activeTab === 'inicio' && <Home settings={settings} onGo={go} />}
+          {activeTab === 'caneta' && <Injections settings={settings} />}
+          {activeTab === 'peso' && <Weight settings={settings} />}
+          {activeTab === 'sintomas' && <Symptoms settings={settings} />}
+          {activeTab === 'nutricao' && hasNutritionAccess && <Nutrition settings={settings} />}
+          {activeTab === 'config' && <SettingsScreen settings={settings} />}
+          {activeTab === 'admin' && authProfile.is_admin && <AdminScreen />}
+        </Suspense>
       </main>
 
       <nav className="tabbar" aria-label="Navegação principal">

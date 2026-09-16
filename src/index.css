@@ -170,6 +170,10 @@ img {
   padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 12px);
 }
 
+.screen-loading {
+  min-height: 40dvh;
+}
+
 .splash {
   display: grid;
   place-items: center;
@@ -200,7 +204,6 @@ img {
   max-width: var(--maxw);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
-  grid-template-columns: repeat(6, 1fr);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
