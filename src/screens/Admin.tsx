@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { AccessProfile } from '../lib/auth-context'
+import {
+  isMissingNutritionEnabledColumn,
+  LEGACY_PROFILE_COLUMNS,
+  PROFILE_COLUMNS,
+  type AccessProfile,
+} from '../lib/auth-context'
 import { supabase } from '../lib/supabase'
 
 export function AdminScreen() {
@@ -8,18 +13,34 @@ export function AdminScreen() {
   const [changingId, setChangingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [nutritionFeatureAvailable, setNutritionFeatureAvailable] = useState(true)
 
   const loadPeople = useCallback(async () => {
     if (!supabase) return
-    const { data, error: queryError } = await supabase
+    const result = await supabase
       .from('profiles')
-      .select('id,email,full_name,access_enabled,nutrition_enabled,is_admin,created_at,updated_at')
+      .select(PROFILE_COLUMNS)
       .order('created_at', { ascending: false })
+    let data = result.data as AccessProfile[] | null
+    let queryError = result.error
+    let hasNutritionFeature = true
+
+    if (isMissingNutritionEnabledColumn(queryError)) {
+      const legacyResult = await supabase
+        .from('profiles')
+        .select(LEGACY_PROFILE_COLUMNS)
+        .order('created_at', { ascending: false })
+      data = legacyResult.data?.map((person) => ({ ...person, nutrition_enabled: false })) as AccessProfile[] | null
+      queryError = legacyResult.error
+      hasNutritionFeature = false
+    }
+
     if (queryError) setError(queryError.message)
     else {
-      setPeople((data ?? []) as AccessProfile[])
+      setPeople(data ?? [])
       setError(null)
     }
+    setNutritionFeatureAvailable(hasNutritionFeature)
     setLoading(false)
   }, [])
 
@@ -82,6 +103,7 @@ export function AdminScreen() {
       </label>
 
       {error && <p className="error-box" role="alert">{error}</p>}
+      {!nutritionFeatureAvailable && <p className="notice-box" role="status">A migração de Nutrição ainda não foi aplicada ao Supabase. O módulo permanece desabilitado.</p>}
       {loading ? <p className="empty">Carregando cadastros…</p> : (
         <div className="subscriber-list">
           {filtered.map((person) => {
@@ -103,14 +125,16 @@ export function AdminScreen() {
                     </span>
                     <em className="sr-only">{enabled ? 'Desativar acesso' : 'Ativar acesso'} de {person.full_name || person.email}</em>
                   </label>
-                  <label className="subscriber-control" title={person.is_admin ? 'O administrador master sempre tem acesso à nutrição' : undefined}>
-                    <span>Nutrição</span>
-                    <span className="access-switch">
-                      <input type="checkbox" checked={person.nutrition_enabled || person.is_admin} disabled={person.is_admin || changingId === person.id} onChange={(event) => void changeNutritionAccess(person, event.target.checked)} />
-                      <span aria-hidden="true" />
-                    </span>
-                    <em className="sr-only">{person.nutrition_enabled || person.is_admin ? 'Desativar nutrição' : 'Ativar nutrição'} de {person.full_name || person.email}</em>
-                  </label>
+                  {nutritionFeatureAvailable && (
+                    <label className="subscriber-control" title={person.is_admin ? 'O administrador master sempre tem acesso à nutrição' : undefined}>
+                      <span>Nutrição</span>
+                      <span className="access-switch">
+                        <input type="checkbox" checked={person.nutrition_enabled || person.is_admin} disabled={person.is_admin || changingId === person.id} onChange={(event) => void changeNutritionAccess(person, event.target.checked)} />
+                        <span aria-hidden="true" />
+                      </span>
+                      <em className="sr-only">{person.nutrition_enabled || person.is_admin ? 'Desativar nutrição' : 'Ativar nutrição'} de {person.full_name || person.email}</em>
+                    </label>
+                  )}
                 </div>
               </article>
             )

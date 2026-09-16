@@ -1,5 +1,12 @@
 import { createContext, useContext } from 'react'
 
+export const PROFILE_COLUMNS = 'id,email,full_name,access_enabled,nutrition_enabled,is_admin,created_at,updated_at'
+export const LEGACY_PROFILE_COLUMNS = 'id,email,full_name,access_enabled,is_admin,created_at,updated_at'
+
+export function isMissingNutritionEnabledColumn(error: { message?: string } | null) {
+  return Boolean(error?.message?.toLocaleLowerCase('pt-BR').includes('nutrition_enabled'))
+}
+
 export interface AccessProfile {
   id: string
   email: string

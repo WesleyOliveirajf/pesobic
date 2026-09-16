@@ -4,7 +4,13 @@ import { activateUserDatabase } from '../db/db'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { AuthScreen } from '../screens/Auth'
 import { AccessPending } from '../screens/AccessPending'
-import { AuthContext, type AccessProfile } from '../lib/auth-context'
+import {
+  AuthContext,
+  isMissingNutritionEnabledColumn,
+  LEGACY_PROFILE_COLUMNS,
+  PROFILE_COLUMNS,
+  type AccessProfile,
+} from '../lib/auth-context'
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -52,14 +58,27 @@ export function AuthGate({ children }: { children: ReactNode }) {
     let active = true
 
     const loadProfile = async () => {
-      const { data, error } = await client
+      const result = await client
         .from('profiles')
-        .select('id,email,full_name,access_enabled,nutrition_enabled,is_admin,created_at,updated_at')
+        .select(PROFILE_COLUMNS)
         .eq('id', session.user.id)
         .single()
+      let data = result.data as AccessProfile | null
+      let error = result.error
+
+      if (isMissingNutritionEnabledColumn(error)) {
+        const legacyResult = await client
+          .from('profiles')
+          .select(LEGACY_PROFILE_COLUMNS)
+          .eq('id', session.user.id)
+          .single()
+        data = legacyResult.data ? { ...legacyResult.data, nutrition_enabled: false } as AccessProfile : null
+        error = legacyResult.error
+      }
+
       if (!active) return
       setProfileError(error?.message ?? null)
-      setProfile((data as AccessProfile | null) ?? null)
+      setProfile(data)
       setLoading(false)
     }
 
