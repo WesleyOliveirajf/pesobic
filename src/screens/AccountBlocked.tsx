@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { wipeAll } from '../db/db'
 import type { AccessProfile } from '../lib/auth-context'
-import { exportBackup, exportPhotos } from '../lib/backup'
+import { exportAccountBundle } from '../lib/backup'
 import { deleteOwnAccount } from '../lib/repo'
 import { supabase } from '../lib/supabase'
 import { supportContact } from '../lib/support'
@@ -16,9 +16,11 @@ export function AccountBlocked({ profile }: { profile: AccessProfile }) {
     setBusy(true)
     setMessage(null)
     try {
-      await exportBackup(profile.id)
-      const photos = await exportPhotos()
-      setMessage(photos ? 'Backup e arquivo de fotos exportados.' : 'Backup exportado.')
+      const { photoCount } = await exportAccountBundle(profile.id, {
+        email: profile.email,
+        fullName: profile.full_name,
+      })
+      setMessage(photoCount ? 'Backup e arquivo de fotos exportados.' : 'Backup exportado.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Não foi possível exportar agora.')
     } finally {
@@ -38,8 +40,7 @@ export function AccountBlocked({ profile }: { profile: AccessProfile }) {
     setBusy(true)
     setMessage(null)
     try {
-      await exportBackup(profile.id)
-      await exportPhotos()
+      await exportAccountBundle(profile.id, { email: profile.email, fullName: profile.full_name })
       const { error } = await supabase.auth.signInWithPassword({ email: profile.email, password })
       if (error) throw new Error('Confirme a senha para encerrar a conta.')
       await deleteOwnAccount()

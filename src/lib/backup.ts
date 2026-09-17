@@ -10,18 +10,25 @@ import type {
 import { todayISO } from './format'
 import { triggerDownload } from './ics'
 
-const FORMAT = 'pesobic-backup'
-const VERSION = 2
+export const BACKUP_FORMAT = 'pesobic-backup'
+export const BACKUP_VERSION = 2
 
-interface BackupFile {
-  format: typeof FORMAT
+export interface BackupIdentity {
+  userId: string
+  email: string | null
+  full_name: string | null
+}
+
+export interface BackupIdentityHint {
+  email?: string | null
+  fullName?: string | null
+}
+
+export interface BackupFile {
+  format: typeof BACKUP_FORMAT
   version: number
   exportedAt: string
-  identity: {
-    userId: string
-    email: string | null
-    full_name: string | null
-  }
+  identity: BackupIdentity
   settings: Settings | null
   injections: Injection[]
   weighIns: WeighIn[]
@@ -29,7 +36,74 @@ interface BackupFile {
   nutrition: NutritionDay[]
 }
 
-export async function exportBackup(userId: string): Promise<void> {
+export function resolveBackupIdentity(
+  userId: string,
+  remote: repo.AccountIdentity | null,
+  hint?: BackupIdentityHint,
+): BackupIdentity {
+  return {
+    userId,
+    email: remote?.email ?? hint?.email ?? null,
+    full_name: remote?.fullName ?? hint?.fullName ?? null,
+  }
+}
+
+export function buildBackupFile(input: {
+  userId: string
+  identity: BackupIdentity
+  settings: Settings | null
+  injections: Injection[]
+  weighIns: WeighIn[]
+  symptoms: SymptomLog[]
+  nutrition: NutritionDay[]
+  exportedAt?: string
+}): BackupFile {
+  return {
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    exportedAt: input.exportedAt ?? new Date().toISOString(),
+    identity: input.identity,
+    settings: input.settings,
+    injections: input.injections,
+    weighIns: input.weighIns,
+    symptoms: input.symptoms,
+    nutrition: input.nutrition,
+  }
+}
+
+/** Aceita v2 (com identidade) e o JSON antigo sem o campo. */
+export function parseBackupFile(raw: unknown): {
+  version: number
+  identity: BackupIdentity | null
+  settings: Settings | null
+  injections: Injection[]
+  weighIns: WeighIn[]
+  symptoms: SymptomLog[]
+  nutrition: NutritionDay[]
+} {
+  const data = raw as Partial<BackupFile> | null
+  if (!data || data.format !== BACKUP_FORMAT) {
+    throw new Error('Arquivo nao e um backup do Pesobic.')
+  }
+  const identity = data.identity
+  return {
+    version: typeof data.version === 'number' ? data.version : 1,
+    identity: identity?.userId
+      ? {
+          userId: identity.userId,
+          email: identity.email ?? null,
+          full_name: identity.full_name ?? null,
+        }
+      : null,
+    settings: data.settings ?? null,
+    injections: data.injections ?? [],
+    weighIns: data.weighIns ?? [],
+    symptoms: data.symptoms ?? [],
+    nutrition: data.nutrition ?? [],
+  }
+}
+
+export async function exportBackup(userId: string, identityHint?: BackupIdentityHint): Promise<BackupFile> {
   const results = await Promise.allSettled([
     db.settings.get('singleton'),
     repo.loadAccountSettings(userId),
@@ -43,7 +117,7 @@ export async function exportBackup(userId: string): Promise<void> {
     results[index].status === 'fulfilled' ? results[index].value as T : fallback
   const cached = value<Settings | undefined>(0, undefined)
   const remoteSettings = value<Settings | null>(1, null)
-  const identity = value<repo.AccountIdentity | null>(2, null)
+  const remoteIdentity = value<repo.AccountIdentity | null>(2, null)
   const injections = value<Injection[]>(3, [])
   const weighIns = value<WeighIn[]>(4, [])
   const symptoms = value<SymptomLog[]>(5, [])
@@ -51,48 +125,44 @@ export async function exportBackup(userId: string): Promise<void> {
   const settings = remoteSettings
     ? { ...remoteSettings, lastExportAt: cached?.lastExportAt ?? null }
     : cached ?? null
-  const data: BackupFile = {
-    format: FORMAT,
-    version: VERSION,
-    exportedAt: new Date().toISOString(),
-    identity: {
-      userId,
-      email: identity?.email ?? null,
-      full_name: identity?.fullName ?? null,
-    },
+  const data = buildBackupFile({
+    userId,
+    identity: resolveBackupIdentity(userId, remoteIdentity, identityHint),
     settings: settings ?? null,
     injections,
     weighIns,
     symptoms,
     nutrition,
-  }
+  })
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   triggerDownload(blob, `pesobic-backup-${todayISO()}.json`)
   await patchLocalSettings({ lastExportAt: Date.now() })
+  return data
+}
+
+/** JSON principal e, se existirem, o arquivo de fotos. Usado em Encerrar. */
+export async function exportAccountBundle(
+  userId: string,
+  identityHint?: BackupIdentityHint,
+): Promise<{ backup: BackupFile; photoCount: number }> {
+  const backup = await exportBackup(userId, identityHint)
+  const photoCount = await exportPhotos()
+  return { backup, photoCount }
 }
 
 /** Importa um backup: substitui os registros do usuario no banco (perfil local fica intacto). */
 export async function importBackup(userId: string, file: File): Promise<{ counts: Record<string, number> }> {
-  const text = await file.text()
-  const data = JSON.parse(text) as Partial<BackupFile>
-  if (data.format !== FORMAT) {
-    throw new Error('Arquivo nao e um backup do Pesobic.')
-  }
-
-  const injections = data.injections ?? []
-  const weighIns = data.weighIns ?? []
-  const symptoms = data.symptoms ?? []
-  const nutrition = data.nutrition ?? []
+  const data = parseBackupFile(JSON.parse(await file.text()))
 
   await repo.wipeAllForUser(userId)
   if (data.settings) {
     const saved = await repo.saveAccountSettings(userId, { ...data.settings, id: 'singleton' })
     await cacheSettings(saved)
   }
-  for (const row of injections) await repo.addInjection(userId, stripId(row))
-  for (const row of weighIns) await repo.addWeighIn(userId, stripId(row))
-  for (const row of symptoms) await repo.addSymptomLog(userId, stripId(row))
-  for (const row of nutrition) {
+  for (const row of data.injections) await repo.addInjection(userId, stripId(row))
+  for (const row of data.weighIns) await repo.addWeighIn(userId, stripId(row))
+  for (const row of data.symptoms) await repo.addSymptomLog(userId, stripId(row))
+  for (const row of data.nutrition) {
     await repo.upsertNutritionDay(userId, row.date, {
       proteinG: row.proteinG,
       waterMl: row.waterMl,
@@ -103,10 +173,10 @@ export async function importBackup(userId: string, file: File): Promise<{ counts
 
   return {
     counts: {
-      injections: injections.length,
-      weighIns: weighIns.length,
-      symptoms: symptoms.length,
-      nutrition: nutrition.length,
+      injections: data.injections.length,
+      weighIns: data.weighIns.length,
+      symptoms: data.symptoms.length,
+      nutrition: data.nutrition.length,
     },
   }
 }
@@ -141,6 +211,7 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 
 export async function exportPhotos(): Promise<number> {
   const rows = await db.photos.orderBy('at').toArray()
+  if (!rows.length) return 0
   const photos = await Promise.all(
     rows.map(async (p) => ({
       date: p.date,
@@ -149,7 +220,6 @@ export async function exportPhotos(): Promise<number> {
       dataUrl: await blobToDataUrl(p.blob),
     })),
   )
-  if (!rows.length) return 0
   const data: PhotosFile = {
     format: 'pesobic-fotos',
     version: 1,

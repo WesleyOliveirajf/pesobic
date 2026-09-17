@@ -84,8 +84,11 @@ configure o dashboard SMTP por acidente nesta barra.
 
 ## Backup
 
-Config > Exportar backup (JSON). A conta na nuvem e a copia oficial; o export
-local e extra. Fotos de progresso ainda ficam so no aparelho (aba Peso).
+Config > Exportar backup (JSON). O arquivo inclui identidade (e-mail, nome,
+userId) e os registros clinicos disponiveis. A conta na nuvem e a copia
+oficial; o export local e extra. Fotos de progresso ficam so no aparelho
+(aba Peso) e saem num arquivo separado; Encerrar baixa os dois antes de
+apagar. Sair nao apaga conta nem fotos.
 
 ## Stack
 

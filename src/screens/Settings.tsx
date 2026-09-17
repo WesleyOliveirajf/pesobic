@@ -16,7 +16,7 @@ import {
 } from '../components/ui'
 import { MEDICATIONS, cadenceDays } from '../lib/domain'
 import { downloadIcs } from '../lib/ics'
-import { exportBackup, exportPhotos, importBackup } from '../lib/backup'
+import { exportAccountBundle, exportBackup, importBackup } from '../lib/backup'
 import { fmtDateTime, todayISO } from '../lib/format'
 
 const WEEKDAYS = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado']
@@ -83,8 +83,7 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
     setClosing(true)
     setMsg(null)
     try {
-      await exportBackup(profile.id)
-      await exportPhotos()
+      await exportAccountBundle(profile.id, { email: profile.email, fullName: profile.full_name })
       const { error: authError } = await supabase.auth.signInWithPassword({
         email: profile.email,
         password: closePassword,
@@ -252,7 +251,7 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
           <Btn
             variant="primary"
             onClick={async () => {
-              await exportBackup(profile.id)
+              await exportBackup(profile.id, { email: profile.email, fullName: profile.full_name })
               setMsg('Backup exportado.')
             }}
           >
