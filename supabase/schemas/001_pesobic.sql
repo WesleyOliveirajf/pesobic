@@ -20,6 +20,11 @@ create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text not null,
   full_name text check (full_name is null or char_length(full_name) <= 160),
+  legal_version text check (legal_version is null or char_length(legal_version) between 1 and 64),
+  age_confirmed_at timestamptz,
+  privacy_accepted_at timestamptz,
+  terms_accepted_at timestamptz,
+  health_data_consent_at timestamptz,
   access_enabled boolean not null default false,
   nutrition_enabled boolean not null default false,
   blocked boolean not null default false,
@@ -77,6 +82,20 @@ as $$
   );
 $$;
 
+create or replace function private.has_nutrition_enabled()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = (select auth.uid())
+      and nutrition_enabled = true
+  );
+$$;
+
 create or replace function private.handle_new_user()
 returns trigger
 language plpgsql
@@ -84,8 +103,24 @@ security definer
 set search_path = ''
 as $$
 begin
-  insert into public.profiles (id, email, full_name)
-  values (new.id, new.email, nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''));
+  insert into public.profiles (
+    id, email, full_name, legal_version, age_confirmed_at,
+    privacy_accepted_at, terms_accepted_at, health_data_consent_at
+  )
+  values (
+    new.id,
+    new.email,
+    nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
+    case when (new.raw_user_meta_data ->> 'privacy_accepted') = 'true'
+           and (new.raw_user_meta_data ->> 'terms_accepted') = 'true'
+           and (new.raw_user_meta_data ->> 'health_data_consent') = 'true'
+         then left(nullif(trim(new.raw_user_meta_data ->> 'legal_version'), ''), 64)
+    end,
+    case when (new.raw_user_meta_data ->> 'age_confirmed') = 'true' then now() end,
+    case when (new.raw_user_meta_data ->> 'privacy_accepted') = 'true' then now() end,
+    case when (new.raw_user_meta_data ->> 'terms_accepted') = 'true' then now() end,
+    case when (new.raw_user_meta_data ->> 'health_data_consent') = 'true' then now() end
+  );
   return new;
 end;
 $$;
@@ -163,6 +198,7 @@ $$;
 revoke all on function private.is_admin() from public, anon;
 revoke all on function private.is_not_blocked() from public, anon;
 revoke all on function private.has_nutrition_access() from public, anon;
+revoke all on function private.has_nutrition_enabled() from public, anon;
 revoke all on function private.handle_new_user() from public, anon, authenticated;
 revoke all on function private.delete_own_account() from public, anon, authenticated;
 revoke all on function public.admin_set_user_blocked(uuid, boolean) from public, anon;
@@ -171,6 +207,7 @@ revoke all on function public.delete_own_account() from public, anon;
 grant execute on function private.is_admin() to authenticated;
 grant execute on function private.is_not_blocked() to authenticated;
 grant execute on function private.has_nutrition_access() to authenticated;
+grant execute on function private.has_nutrition_enabled() to authenticated;
 grant execute on function private.delete_own_account() to authenticated;
 grant execute on function public.admin_set_user_blocked(uuid, boolean) to authenticated;
 grant execute on function public.admin_set_user_nutrition_access(uuid, boolean) to authenticated;
@@ -385,7 +422,7 @@ with check ((select auth.uid()) = id and (select private.is_not_blocked()));
 
 create policy "medication_plans_select_own"
 on public.medication_plans for select to authenticated
-using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
+using ((select auth.uid()) = user_id);
 
 create policy "medication_plans_insert_own"
 on public.medication_plans for insert to authenticated
@@ -402,7 +439,7 @@ using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "titration_phases_select_own"
 on public.titration_phases for select to authenticated
-using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
+using ((select auth.uid()) = user_id);
 
 create policy "titration_phases_insert_own"
 on public.titration_phases for insert to authenticated
@@ -419,7 +456,7 @@ using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "injections_select_own"
 on public.injections for select to authenticated
-using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
+using ((select auth.uid()) = user_id);
 
 create policy "injections_insert_own"
 on public.injections for insert to authenticated
@@ -436,7 +473,7 @@ using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "weigh_ins_select_own"
 on public.weigh_ins for select to authenticated
-using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
+using ((select auth.uid()) = user_id);
 
 create policy "weigh_ins_insert_own"
 on public.weigh_ins for insert to authenticated
@@ -453,7 +490,7 @@ using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "symptom_logs_select_own"
 on public.symptom_logs for select to authenticated
-using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
+using ((select auth.uid()) = user_id);
 
 create policy "symptom_logs_insert_own"
 on public.symptom_logs for insert to authenticated
@@ -470,7 +507,7 @@ using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "nutrition_days_select_own"
 on public.nutrition_days for select to authenticated
-using ((select private.has_nutrition_access()) and (select auth.uid()) = user_id);
+using ((select private.has_nutrition_enabled()) and (select auth.uid()) = user_id);
 
 create policy "nutrition_days_insert_own"
 on public.nutrition_days for insert to authenticated
@@ -487,7 +524,7 @@ using ((select private.has_nutrition_access()) and (select auth.uid()) = user_id
 
 create policy "progress_photos_select_own"
 on public.progress_photos for select to authenticated
-using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
+using ((select auth.uid()) = user_id);
 
 create policy "progress_photos_insert_own"
 on public.progress_photos for insert to authenticated

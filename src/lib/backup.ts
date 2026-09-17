@@ -11,12 +11,17 @@ import { todayISO } from './format'
 import { triggerDownload } from './ics'
 
 const FORMAT = 'pesobic-backup'
-const VERSION = 1
+const VERSION = 2
 
 interface BackupFile {
   format: typeof FORMAT
   version: number
   exportedAt: string
+  identity: {
+    userId: string
+    email: string | null
+    full_name: string | null
+  }
   settings: Settings | null
   injections: Injection[]
   weighIns: WeighIn[]
@@ -25,14 +30,24 @@ interface BackupFile {
 }
 
 export async function exportBackup(userId: string): Promise<void> {
-  const [cached, remoteSettings, injections, weighIns, symptoms, nutrition] = await Promise.all([
+  const results = await Promise.allSettled([
     db.settings.get('singleton'),
-    repo.loadAccountSettings(userId).catch(() => null),
+    repo.loadAccountSettings(userId),
+    repo.getAccountIdentity(userId),
     repo.listInjections(userId),
     repo.listWeighIns(userId),
     repo.listSymptomLogs(userId),
     repo.listNutritionDays(userId),
   ])
+  const value = <T,>(index: number, fallback: T): T =>
+    results[index].status === 'fulfilled' ? results[index].value as T : fallback
+  const cached = value<Settings | undefined>(0, undefined)
+  const remoteSettings = value<Settings | null>(1, null)
+  const identity = value<repo.AccountIdentity | null>(2, null)
+  const injections = value<Injection[]>(3, [])
+  const weighIns = value<WeighIn[]>(4, [])
+  const symptoms = value<SymptomLog[]>(5, [])
+  const nutrition = value<NutritionDay[]>(6, [])
   const settings = remoteSettings
     ? { ...remoteSettings, lastExportAt: cached?.lastExportAt ?? null }
     : cached ?? null
@@ -40,6 +55,11 @@ export async function exportBackup(userId: string): Promise<void> {
     format: FORMAT,
     version: VERSION,
     exportedAt: new Date().toISOString(),
+    identity: {
+      userId,
+      email: identity?.email ?? null,
+      full_name: identity?.fullName ?? null,
+    },
     settings: settings ?? null,
     injections,
     weighIns,
@@ -129,6 +149,7 @@ export async function exportPhotos(): Promise<number> {
       dataUrl: await blobToDataUrl(p.blob),
     })),
   )
+  if (!rows.length) return 0
   const data: PhotosFile = {
     format: 'pesobic-fotos',
     version: 1,

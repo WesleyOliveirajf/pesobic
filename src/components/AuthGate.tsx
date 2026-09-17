@@ -138,6 +138,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </main>
     )
   }
-  if (profile.blocked && !profile.is_admin) return <AccountBlocked name={profile.full_name} />
+  if (profile.blocked && !profile.is_admin) return <AccountBlocked profile={profile} />
   return <AuthContext.Provider value={profile}>{children}</AuthContext.Provider>
 }

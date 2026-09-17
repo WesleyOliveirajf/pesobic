@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { authRedirectUrl, isSupabaseConfigured, supabase } from '../lib/supabase'
 import { friendlyAuthError, validateSignup } from '../lib/auth-validation'
 
+export const LEGAL_VERSION = '2026-09-16'
+
 type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery'
 
 export function AuthScreen({
@@ -18,6 +20,7 @@ export function AuthScreen({
   const [confirmPassword, setConfirmPassword] = useState('')
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
+  const [healthDataConsent, setHealthDataConsent] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,7 +49,7 @@ export function AuthScreen({
       return
     }
     if (isSignup) {
-      const invalid = validateSignup({ password, confirmPassword, ageConfirmed, termsAccepted })
+      const invalid = validateSignup({ password, confirmPassword, ageConfirmed, termsAccepted, healthDataConsent })
       if (invalid) {
         setError(invalid)
         return
@@ -68,7 +71,14 @@ export function AuthScreen({
           email,
           password,
           options: {
-            data: { full_name: name.trim() },
+            data: {
+              full_name: name.trim(),
+              legal_version: LEGAL_VERSION,
+              age_confirmed: ageConfirmed,
+              privacy_accepted: termsAccepted,
+              terms_accepted: termsAccepted,
+              health_data_consent: healthDataConsent,
+            },
             emailRedirectTo: authRedirectUrl(),
           },
         })
@@ -190,6 +200,12 @@ export function AuthScreen({
                     <button type="button" className="auth-text-btn inline" onClick={() => onOpenLegal?.('termos')}>termos de uso</button>
                   </span>
                 </label>
+                <label className="auth-check auth-check-health">
+                  <input type="checkbox" checked={healthDataConsent} onChange={(event) => setHealthDataConsent(event.target.checked)} />
+                  <span>
+                    Autorizo o tratamento dos meus dados de saúde (medicamento, dose, peso, sintomas e medidas) para manter meu caderno pessoal na conta. Sem essa autorização, não é possível criar a conta.
+                  </span>
+                </label>
               </div>
             )}
             {isLogin && <button type="button" className="auth-text-btn forgot-link" onClick={() => changeMode('forgot')}>Esqueci minha senha</button>}
@@ -205,6 +221,11 @@ export function AuthScreen({
             {isLogin && <>Ainda não tem conta? <button type="button" onClick={() => changeMode('signup')}>Criar cadastro</button></>}
             {isSignup && <>Já tem uma conta? <button type="button" onClick={() => changeMode('login')}>Entrar</button></>}
             {(isForgot || isRecovery) && <button type="button" onClick={() => changeMode('login')}>Voltar para o login</button>}
+            <span className="auth-legal-links">
+              <button type="button" onClick={() => onOpenLegal?.('privacidade')}>Política de privacidade</button>
+              {' · '}
+              <button type="button" onClick={() => onOpenLegal?.('termos')}>Termos de uso</button>
+            </span>
           </footer>
         </div>
       </section>
