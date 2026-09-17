@@ -16,7 +16,7 @@ import {
 } from '../components/ui'
 import { MEDICATIONS, cadenceDays } from '../lib/domain'
 import { downloadIcs } from '../lib/ics'
-import { exportBackup, importBackup } from '../lib/backup'
+import { exportBackup, exportPhotos, importBackup } from '../lib/backup'
 import { fmtDateTime, todayISO } from '../lib/format'
 
 const WEEKDAYS = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado']
@@ -84,6 +84,7 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
     setMsg(null)
     try {
       await exportBackup(profile.id)
+      await exportPhotos()
       const { error: authError } = await supabase.auth.signInWithPassword({
         email: profile.email,
         password: closePassword,
@@ -228,16 +229,20 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
       <Card title="Conta">
         <p className="muted-small">
           A conta na nuvem e a copia oficial. Este aparelho guarda um cache de leitura e as fotos
-          locais. Suporte: {supportContact()}.
+          locais. Sair encerra apenas a sessão: não apaga a conta nem as fotos deste aparelho.
+          Suporte: {supportContact()}.
         </p>
         <div className="btn-row wrap">
           <Btn variant="ghost" onClick={() => supabase?.auth.signOut()}>Sair</Btn>
+          <a className="btn btn-ghost" href="?legal=privacidade">Política de privacidade</a>
+          <a className="btn btn-ghost" href="?legal=termos">Termos de uso</a>
         </div>
       </Card>
 
       <Card title="Backup dos dados">
         <p className="muted-small">
-          Exporte um JSON extra se quiser uma copia local. Encerrar a conta tambem gera este arquivo
+          Exporte um JSON extra se quiser uma copia local. Ele inclui identidade e registros
+          disponíveis. Encerrar a conta também gera este arquivo e, se houver, o arquivo de fotos
           antes de apagar.
           {settings.lastExportAt
             ? ` Ultimo export: ${fmtDateTime(settings.lastExportAt)}.`
@@ -275,13 +280,14 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
           </label>
         </div>
         {msg && <p className="muted-small">{msg}</p>}
-        <p className="muted-small">Fotos de progresso tem export proprio na aba Peso.</p>
+        <p className="muted-small">Fotos de progresso têm export próprio na aba Peso.</p>
       </Card>
 
       <Card title="Encerrar conta">
         <p className="muted-small">
           Diferente de Sair: apaga a conta, o perfil e os registros na hora. Sem quarentena.
-          Confirme a senha e digite ENCERRAR. Um backup JSON e baixado antes.
+          Confirme a senha e digite ENCERRAR. Um backup JSON e o arquivo de fotos, quando houver,
+          são baixados antes.
         </p>
         <Field label="Senha">
           <TextInput type="password" value={closePassword} onChange={(e) => setClosePassword(e.target.value)} autoComplete="current-password" />

@@ -3,9 +3,11 @@ export function validateSignup(input: {
   confirmPassword: string
   ageConfirmed: boolean
   termsAccepted: boolean
+  healthDataConsent: boolean
 }): string | null {
   if (!input.ageConfirmed) return 'Voce precisa ter 18 anos ou mais para criar uma conta.'
   if (!input.termsAccepted) return 'Aceite a politica de privacidade e os termos de uso.'
+  if (!input.healthDataConsent) return 'Autorize o tratamento dos seus dados de saude para criar uma conta.'
   if (input.password.length < 8) return 'Crie uma senha com pelo menos 8 caracteres.'
   if (input.password !== input.confirmPassword) return 'As senhas nao coincidem.'
   return null

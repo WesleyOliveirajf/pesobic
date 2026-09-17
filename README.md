@@ -20,6 +20,11 @@ npm run dev
 
 Cadastro por e-mail e senha (sem Google/Apple nesta barra). Confirmacao de
 e-mail e recuperacao de senha exigem SMTP do Auth no ambiente de producao.
+Para uma publicacao aberta, configure tambem `VITE_SUPPORT_EMAIL` com o canal
+real para titulares de dados; sem ela, o app mostra `OPERATOR_EMAIL_UNSET` e
+nao inventa um endereco. O operador deve revisar juridicamente a politica de
+privacidade, informar sua identificacao quando aplicavel e manter o canal apto
+para pedidos de titulares.
 
 ## Build
 
