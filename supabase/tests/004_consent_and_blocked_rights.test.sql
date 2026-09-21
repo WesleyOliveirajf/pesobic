@@ -25,7 +25,7 @@ insert into auth.users (
 
 -- signup com metadata deixa prova; metadata nunca vira privilegio
 select results_eq(
-  $$select legal_version, health_consent_at is not null, terms_accepted_at is not null,
+  $$select legal_version, health_data_consent_at is not null, terms_accepted_at is not null,
            privacy_accepted_at is not null, age_confirmed_at is not null
     from public.profiles where id = '11111111-1111-4111-8111-111111111111'$$,
   $$values ('2026-09-16'::text, true, true, true, true)$$,
@@ -39,13 +39,13 @@ select results_eq(
 );
 
 select results_eq(
-  $$select legal_version is null, health_consent_at is null, terms_accepted_at is null
+  $$select legal_version is null, health_data_consent_at is null, terms_accepted_at is null
     from public.profiles where id = '22222222-2222-4222-8222-222222222222'$$,
   $$values (true, true, true)$$,
   'signup without metadata does not fabricate consent'
 );
 
-select hasnt_column('public', 'admin_directory', 'health_consent_at', 'admin_directory hides consent timestamps');
+select hasnt_column('public', 'admin_directory', 'health_data_consent_at', 'admin_directory hides consent timestamps');
 select hasnt_column('public', 'admin_directory', 'legal_version', 'admin_directory hides legal_version');
 
 -- dados clinicos do bloqueado (inseridos como superuser)
@@ -63,7 +63,7 @@ set local request.jwt.claim.role = 'authenticated';
 set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
 
 select throws_ok(
-  $$update public.profiles set health_consent_at = null
+  $$update public.profiles set health_data_consent_at = null
     where id = '11111111-1111-4111-8111-111111111111'$$,
   '42501',
   null,

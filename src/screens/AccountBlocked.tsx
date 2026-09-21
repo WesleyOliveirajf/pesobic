@@ -1,24 +1,53 @@
 import { useState } from 'react'
+import { wipeAll } from '../db/db'
+import type { AccessProfile } from '../lib/auth-context'
+import { exportAccountBundle } from '../lib/backup'
+import { deleteOwnAccount } from '../lib/repo'
 import { supabase } from '../lib/supabase'
 import { supportContact } from '../lib/support'
-import { exportBackup } from '../lib/backup'
-import { closeOwnAccount } from '../lib/close-account'
-import { legalHref } from '../lib/legal'
-import { Btn, Field, TextInput } from '../components/ui'
 
-export function AccountBlocked({ id, email, name }: { id: string; email: string; name?: string | null }) {
+export function AccountBlocked({ profile }: { profile: AccessProfile }) {
+  const [closeText, setCloseText] = useState('')
   const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
 
-  async function run(action: () => Promise<void>, fallback: string) {
+  async function exportOwnData() {
     setBusy(true)
-    setMsg(null)
+    setMessage(null)
     try {
-      await action()
-    } catch (err) {
-      setMsg(err instanceof Error ? err.message : fallback)
+      const { photoCount } = await exportAccountBundle(profile.id, {
+        email: profile.email,
+        fullName: profile.full_name,
+      })
+      setMessage(photoCount ? 'Backup e arquivo de fotos exportados.' : 'Backup exportado.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Não foi possível exportar agora.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function closeAccount() {
+    if (closeText.trim().toUpperCase() !== 'ENCERRAR') {
+      setMessage('Digite ENCERRAR para confirmar.')
+      return
+    }
+    if (!supabase) {
+      setMessage('Supabase não configurado.')
+      return
+    }
+    setBusy(true)
+    setMessage(null)
+    try {
+      await exportAccountBundle(profile.id, { email: profile.email, fullName: profile.full_name })
+      const { error } = await supabase.auth.signInWithPassword({ email: profile.email, password })
+      if (error) throw new Error('Confirme a senha para encerrar a conta.')
+      await deleteOwnAccount()
+      await wipeAll()
+      await supabase.auth.signOut()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Não foi possível encerrar a conta.')
       setBusy(false)
     }
   }
@@ -28,42 +57,18 @@ export function AccountBlocked({ id, email, name }: { id: string; email: string;
       <section className="pending-card">
         <img src="/logo.svg" alt="" width={58} height={58} />
         <span className="pending-status">Conta bloqueada</span>
-        <h1>{name ? `${name}, esta conta` : 'Esta conta'} foi bloqueada</h1>
-        <p>O acesso de escrita foi pausado por abuso ou revisao. Se foi um engano, fale com o suporte: {supportContact()}.</p>
-        <p className="muted-small">Mesmo bloqueado, voce pode exportar os seus dados ou encerrar a conta.</p>
-
-        <div className="rights-card">
-          <Btn
-            variant="primary"
-            block
-            disabled={busy}
-            onClick={() => void run(async () => {
-              await exportBackup(id)
-              setMsg('Backup exportado.')
-              setBusy(false)
-            }, 'Nao foi possivel exportar.')}
-          >
-            Exportar meus dados (JSON)
-          </Btn>
-          <p className="muted-small">
-            Encerrar apaga a conta, o perfil e os registros na hora, sem quarentena. Confirme a senha e digite ENCERRAR. Um backup JSON e baixado antes.
-          </p>
-          <Field label="Senha">
-            <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
-          </Field>
-          <Field label="Digite ENCERRAR">
-            <TextInput value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="ENCERRAR" />
-          </Field>
-          <Btn variant="danger" block disabled={busy} onClick={() => void run(() => closeOwnAccount({ id, email }, password, confirm), 'Nao foi possivel encerrar a conta.')}>
-            {busy ? 'Aguarde…' : 'Encerrar conta'}
-          </Btn>
-          {msg && <p className="muted-small" role="status">{msg}</p>}
+        <h1>{profile.full_name ? `${profile.full_name}, esta conta` : 'Esta conta'} foi bloqueada</h1>
+        <p>O acesso de escrita foi pausado por abuso ou revisão. Se foi um engano, fale com o suporte: {supportContact()}.</p>
+        <p>Você ainda pode exportar seus próprios dados e encerrar a conta.</p>
+        <div className="btn-row wrap">
+          <button type="button" className="auth-text-btn" onClick={() => void exportOwnData()} disabled={busy}>Exportar meus dados</button>
+          <a className="auth-text-btn" href="?legal=privacidade">Política de privacidade</a>
+          <a className="auth-text-btn" href="?legal=termos">Termos de uso</a>
         </div>
-
-        <p className="legal-links">
-          <a href={legalHref('privacidade')}>Política de privacidade</a>
-          <a href={legalHref('termos')}>Termos de uso</a>
-        </p>
+        <label className="auth-form"><span>Senha para encerrar</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" /></label>
+        <label className="auth-form"><span>Digite ENCERRAR</span><input value={closeText} onChange={(event) => setCloseText(event.target.value)} placeholder="ENCERRAR" /></label>
+        {message && <p className="auth-feedback auth-warning" role="status">{message}</p>}
+        <button type="button" className="auth-submit" onClick={() => void closeAccount()} disabled={busy}>{busy ? 'Aguarde…' : 'Encerrar conta'}</button>
         <button type="button" className="auth-submit" onClick={() => supabase?.auth.signOut()}>Sair da conta</button>
       </section>
     </main>

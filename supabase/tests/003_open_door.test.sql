@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(19);
+select plan(22);
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -10,7 +10,7 @@ insert into auth.users (
 ) values
   (
     '11111111-1111-4111-8111-111111111111', 'authenticated', 'authenticated',
-    'usuario-a@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()
+    'usuario-a@example.test', '', now(), '{"provider":"email","providers":["email"]}', '{"legal_version":"2026-09-16","age_confirmed":true,"privacy_accepted":true,"terms_accepted":true,"health_data_consent":true}', now(), now()
   ),
   (
     '22222222-2222-4222-8222-222222222222', 'authenticated', 'authenticated',
@@ -38,12 +38,33 @@ set blocked = true
 where id = '33333333-3333-4333-8333-333333333333';
 
 update public.profiles
+set nutrition_enabled = true
+where id = '33333333-3333-4333-8333-333333333333';
+
+insert into public.injections (user_id, occurred_at, medication, dose_mg, site, status)
+values ('33333333-3333-4333-8333-333333333333', now(), 'semaglutida', 0.25, 'abdomen_esq', 'aplicada');
+
+insert into public.nutrition_days (user_id, tracked_on, protein_g)
+values ('33333333-3333-4333-8333-333333333333', current_date, 80);
+
+update public.profiles
 set is_admin = true
 where id = '44444444-4444-4444-8444-444444444444';
 
 set local role authenticated;
 set local request.jwt.claim.role = 'authenticated';
 set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+
+select ok(
+  (select legal_version = '2026-09-16'
+    and age_confirmed_at is not null
+    and privacy_accepted_at is not null
+    and terms_accepted_at is not null
+    and health_data_consent_at is not null
+   from public.profiles
+   where id = '11111111-1111-4111-8111-111111111111'),
+  'signup metadata records consent timestamps in profile'
+);
 
 select lives_ok(
   $$insert into public.injections (
@@ -101,6 +122,20 @@ select results_eq(
     where id = '33333333-3333-4333-8333-333333333333'$$,
   array[true],
   'blocked still reads own profile flag'
+);
+
+select results_eq(
+  $$select count(*)::bigint from public.injections
+    where user_id = '33333333-3333-4333-8333-333333333333'$$,
+  array[1::bigint],
+  'blocked reads own clinical data for portability'
+);
+
+select results_eq(
+  $$select count(*)::bigint from public.nutrition_days
+    where user_id = '33333333-3333-4333-8333-333333333333'$$,
+  array[1::bigint],
+  'blocked reads own enabled nutrition data for portability'
 );
 
 set local request.jwt.claim.sub = '44444444-4444-4444-8444-444444444444';

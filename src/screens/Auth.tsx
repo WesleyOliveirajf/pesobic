@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { authRedirectUrl, isSupabaseConfigured, supabase } from '../lib/supabase'
 import { friendlyAuthError, validateSignup } from '../lib/auth-validation'
-import { LEGAL_VERSION, legalHref } from '../lib/legal'
+
+export const LEGAL_VERSION = '2026-09-16'
 
 type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery'
 
@@ -19,7 +20,7 @@ export function AuthScreen({
   const [confirmPassword, setConfirmPassword] = useState('')
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
-  const [healthConsent, setHealthConsent] = useState(false)
+  const [healthDataConsent, setHealthDataConsent] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +49,7 @@ export function AuthScreen({
       return
     }
     if (isSignup) {
-      const invalid = validateSignup({ password, confirmPassword, ageConfirmed, termsAccepted, healthConsent })
+      const invalid = validateSignup({ password, confirmPassword, ageConfirmed, termsAccepted, healthDataConsent })
       if (invalid) {
         setError(invalid)
         return
@@ -73,10 +74,10 @@ export function AuthScreen({
             data: {
               full_name: name.trim(),
               legal_version: LEGAL_VERSION,
-              terms_accepted: termsAccepted,
-              privacy_accepted: termsAccepted,
-              health_data_consent: healthConsent,
               age_confirmed: ageConfirmed,
+              privacy_accepted: termsAccepted,
+              terms_accepted: termsAccepted,
+              health_data_consent: healthDataConsent,
             },
             emailRedirectTo: authRedirectUrl(),
           },
@@ -200,11 +201,9 @@ export function AuthScreen({
                   </span>
                 </label>
                 <label className="auth-check auth-check-health">
-                  <input type="checkbox" checked={healthConsent} onChange={(event) => setHealthConsent(event.target.checked)} />
+                  <input type="checkbox" checked={healthDataConsent} onChange={(event) => setHealthDataConsent(event.target.checked)} />
                   <span>
-                    <strong>Autorizo o tratamento dos meus dados de saúde</strong> (medicamento, dose, peso, medidas e sintomas) para o
-                    Pesobic funcionar, conforme a política de privacidade. Sem esta autorização não é possível criar a conta. Posso
-                    revogar encerrando a conta em Config.
+                    Autorizo o tratamento dos meus dados de saúde (medicamento, dose, peso, sintomas e medidas) para manter meu caderno pessoal na conta. Sem essa autorização, não é possível criar a conta.
                   </span>
                 </label>
               </div>
@@ -218,16 +217,15 @@ export function AuthScreen({
             </button>
           </form>
 
-          <p className="auth-legal-links">
-            <a href={legalHref('privacidade')} onClick={(event) => { event.preventDefault(); onOpenLegal?.('privacidade') }}>Política de privacidade</a>
-            {' · '}
-            <a href={legalHref('termos')} onClick={(event) => { event.preventDefault(); onOpenLegal?.('termos') }}>Termos de uso</a>
-          </p>
-
           <footer className="auth-switch">
             {isLogin && <>Ainda não tem conta? <button type="button" onClick={() => changeMode('signup')}>Criar cadastro</button></>}
             {isSignup && <>Já tem uma conta? <button type="button" onClick={() => changeMode('login')}>Entrar</button></>}
             {(isForgot || isRecovery) && <button type="button" onClick={() => changeMode('login')}>Voltar para o login</button>}
+            <span className="auth-legal-links">
+              <button type="button" onClick={() => onOpenLegal?.('privacidade')}>Política de privacidade</button>
+              {' · '}
+              <button type="button" onClick={() => onOpenLegal?.('termos')}>Termos de uso</button>
+            </span>
           </footer>
         </div>
       </section>

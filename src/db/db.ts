@@ -62,6 +62,7 @@ export function activateUserDatabase(userId: string): void {
   activeUserId = userId
 }
 
+/** Fecha o banco da sessão. Não apaga IndexedDB `pesobic:<userId>` nem as fotos. */
 export function deactivateUserDatabase(): void {
   db.close()
   db = new PesobicDB()

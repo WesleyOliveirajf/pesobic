@@ -9,9 +9,9 @@ describe('cadastro', () => {
         confirmPassword: 'abcdefgh',
         ageConfirmed: true,
         termsAccepted: true,
-        healthConsent: false,
+        healthDataConsent: false,
       }),
-    ).toMatch(/saúde/)
+    ).toMatch(/saude/)
   })
 
   it('recusa menor de 18', () => {
@@ -21,7 +21,7 @@ describe('cadastro', () => {
         confirmPassword: 'abcdefgh',
         ageConfirmed: false,
         termsAccepted: true,
-        healthConsent: true,
+        healthDataConsent: true,
       }),
     ).toMatch(/18/)
   })
@@ -33,9 +33,21 @@ describe('cadastro', () => {
         confirmPassword: 'abcdefgh',
         ageConfirmed: true,
         termsAccepted: false,
-        healthConsent: true,
+        healthDataConsent: true,
       }),
     ).toMatch(/privacidade|termos/i)
+  })
+
+  it('recusa cadastro sem consentimento para dados de saude', () => {
+    expect(
+      validateSignup({
+        password: 'abcdefgh',
+        confirmPassword: 'abcdefgh',
+        ageConfirmed: true,
+        termsAccepted: true,
+        healthDataConsent: false,
+      }),
+    ).toMatch(/saude/i)
   })
 
   it('aceita cadastro valido', () => {
@@ -45,7 +57,7 @@ describe('cadastro', () => {
         confirmPassword: 'abcdefgh',
         ageConfirmed: true,
         termsAccepted: true,
-        healthConsent: true,
+        healthDataConsent: true,
       }),
     ).toBeNull()
   })

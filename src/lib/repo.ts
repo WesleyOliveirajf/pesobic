@@ -348,6 +348,22 @@ export async function wipeAllForUser(userId: string): Promise<void> {
 const PROFILE_CLINICAL =
   'id,email,full_name,height_cm,start_weight_kg,start_date,goal_weight_kg,protein_factor,protein_manual_goal,water_goal_ml,timezone,created_at,updated_at'
 
+export interface AccountIdentity {
+  email: string | null
+  fullName: string | null
+}
+
+export async function getAccountIdentity(userId: string): Promise<AccountIdentity> {
+  const { data, error } = await client()
+    .from('profiles')
+    .select('email,full_name')
+    .eq('id', userId)
+    .single()
+  if (error) throw error
+  const row = data as { email: string; full_name: string | null }
+  return { email: row.email, fullName: row.full_name }
+}
+
 interface ProfileRow {
   id: string
   email: string
