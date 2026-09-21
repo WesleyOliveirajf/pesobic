@@ -67,6 +67,24 @@ export interface PhaseWindow {
   isOpenEnded: boolean
 }
 
+export function clampPhaseIndex(index: number, phaseCount: number): number {
+  if (phaseCount <= 0) return 0
+  return Math.max(0, Math.min(Math.round(index), phaseCount - 1))
+}
+
+export function movePhaseIndex<T>(items: T[], fromIndex: number, delta: number): T[] {
+  const count = items.length
+  if (count === 0) return items
+
+  const nextIndex = clampPhaseIndex(fromIndex + delta, count)
+  if (nextIndex === fromIndex) return [...items]
+
+  const copy = [...items]
+  const [item] = copy.splice(fromIndex, 1)
+  copy.splice(nextIndex, 0, item)
+  return copy
+}
+
 /** Calcula as janelas de data de cada fase a partir da data de inicio. */
 export function phaseWindows(phases: TitrationPhase[], startDateISO: string): PhaseWindow[] {
   const out: PhaseWindow[] = []

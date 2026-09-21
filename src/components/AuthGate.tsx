@@ -69,13 +69,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
     let active = true
 
     const loadProfile = async () => {
-<<<<<<< HEAD
-      const { data, error } = await client
-        .from('profiles')
-        .select('id,email,full_name,access_enabled,account_enabled,nutrition_enabled,is_admin,created_at,updated_at')
-        .eq('id', session.user.id)
-        .single()
-=======
       const result = await client.from('profiles').select(PROFILE_COLUMNS).eq('id', session.user.id).single()
       let data = result.data as AccessProfile | null
       let error = result.error
@@ -98,7 +91,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
         error = legacy.error
       }
 
->>>>>>> e0402f92057a06f87c12041e62154f19c7cbe5a6
       if (!active) return
       setProfileError(error?.message ?? null)
       setProfile(data)
@@ -146,11 +138,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </main>
     )
   }
-<<<<<<< HEAD
-  const accountAllowed = profile.account_enabled ?? profile.access_enabled
-  if ((!accountAllowed && !profile.is_admin) || (!profile.access_enabled && !profile.is_admin)) return <AccessPending name={profile.full_name} />
-=======
-  if (profile.blocked && !profile.is_admin) return <AccountBlocked name={profile.full_name} />
->>>>>>> e0402f92057a06f87c12041e62154f19c7cbe5a6
+  if (profile.blocked && !profile.is_admin) return <AccountBlocked id={profile.id} email={profile.email} name={profile.full_name} />
   return <AuthContext.Provider value={profile}>{children}</AuthContext.Provider>
 }

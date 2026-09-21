@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { wipeAll } from '../db/db'
 import { persistSettings } from '../hooks'
-import * as repo from '../lib/repo'
-import { useAuthProfile } from '../lib/auth-context'
 import { supabase } from '../lib/supabase'
+import { closeOwnAccount } from '../lib/close-account'
+import { legalHref } from '../lib/legal'
+import { useAuthProfile } from '../lib/auth-context'
 import { supportContact } from '../lib/support'
 import type { MedicationKey, Settings } from '../db/types'
 import {
@@ -72,26 +72,10 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
   }
 
   async function closeAccount() {
-    if (closeText.trim().toUpperCase() !== 'ENCERRAR') {
-      setMsg('Digite ENCERRAR para confirmar.')
-      return
-    }
-    if (!supabase) {
-      setMsg('Supabase nao configurado.')
-      return
-    }
     setClosing(true)
     setMsg(null)
     try {
-      await exportBackup(profile.id)
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: profile.email,
-        password: closePassword,
-      })
-      if (authError) throw new Error('Confirme a senha para encerrar a conta.')
-      await repo.deleteOwnAccount()
-      await wipeAll()
-      await supabase.auth.signOut()
+      await closeOwnAccount(profile, closePassword, closeText)
     } catch (err) {
       setMsg(err instanceof Error ? err.message : 'Nao foi possivel encerrar a conta.')
       setClosing(false)
@@ -276,6 +260,14 @@ export function SettingsScreen({ settings }: { settings: Settings }) {
         </div>
         {msg && <p className="muted-small">{msg}</p>}
         <p className="muted-small">Fotos de progresso tem export proprio na aba Peso.</p>
+      </Card>
+
+      <Card title="Privacidade e termos">
+        <p className="muted-small">Releia a qualquer momento o que o Pesobic faz com os seus dados.</p>
+        <p className="legal-links">
+          <a href={legalHref('privacidade')}>Política de privacidade</a>
+          <a href={legalHref('termos')}>Termos de uso</a>
+        </p>
       </Card>
 
       <Card title="Encerrar conta">

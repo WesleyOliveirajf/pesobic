@@ -26,6 +26,7 @@ import { fmtDate, fmtDateTime, num, tsToLocalInput, localInputToTs, todayISO } f
 import { adherence, nextDose } from '../lib/metrics'
 import {
   TITRATION_TEMPLATES,
+  clampPhaseIndex,
   currentPhase,
   expectedPhaseIndex,
   phase as makePhase,
@@ -53,7 +54,7 @@ export function Injections({ settings }: { settings: Settings }) {
   const windows = phaseWindows(settings.phases, settings.startDate)
 
   async function movePhase(delta: number) {
-    const next = Math.max(0, Math.min(settings.phases.length - 1, settings.currentPhaseIndex + delta))
+    const next = clampPhaseIndex(settings.currentPhaseIndex + delta, settings.phases.length)
     try {
       await persistSettings(profile.id, { ...settings, currentPhaseIndex: next })
       setPhaseErr(null)
@@ -363,26 +364,35 @@ function EditPhasesModal({ settings, onClose }: { settings: Settings; onClose: (
   const profile = useAuthProfile()
   const [err, setErr] = useState<string | null>(null)
   const [phases, setPhases] = useState<TitrationPhase[]>(settings.phases.map((p) => ({ ...p })))
+  const [currentPhaseIndex, setCurrentPhaseIndex] = useState(() =>
+    clampPhaseIndex(settings.currentPhaseIndex, settings.phases.length),
+  )
   const [tpl, setTpl] = useState<MedicationKey | ''>('')
 
   function update(i: number, patch: Partial<TitrationPhase>) {
     setPhases((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)))
   }
   function remove(i: number) {
-    setPhases((prev) => prev.filter((_, idx) => idx !== i))
+    setPhases((prev) => {
+      const next = prev.filter((_, idx) => idx !== i)
+      setCurrentPhaseIndex((current) => clampPhaseIndex(current, next.length))
+      return next
+    })
   }
   function add() {
     const last = phases[phases.length - 1]
     setPhases((prev) => [...prev, makePhase(last ? last.doseMg : 0, 4)])
   }
   function applyTemplate(key: MedicationKey) {
-    setPhases(TITRATION_TEMPLATES[key].phases())
+    const next = TITRATION_TEMPLATES[key].phases()
+    setPhases(next)
+    setCurrentPhaseIndex((prev) => clampPhaseIndex(prev, next.length))
     setTpl(key)
   }
 
   async function save() {
     const clean = phases.filter((p) => p.doseMg >= 0)
-    const idx = Math.min(settings.currentPhaseIndex, Math.max(0, clean.length - 1))
+    const idx = clampPhaseIndex(currentPhaseIndex, clean.length)
     try {
       await persistSettings(profile.id, { ...settings, phases: clean, currentPhaseIndex: idx })
       onClose()
@@ -410,6 +420,19 @@ function EditPhasesModal({ settings, onClose }: { settings: Settings; onClose: (
         Templates seguem a bula do fabricante como ponto de partida. Nao sao recomendacao de dose — a
         decisao e sua e do seu acompanhamento.
       </p>
+
+      <Field label="Fase atual">
+        <Select
+          value={String(currentPhaseIndex)}
+          onChange={(e) => setCurrentPhaseIndex(clampPhaseIndex(Number(e.target.value), phases.length))}
+        >
+          {phases.map((_, i) => (
+            <option key={`phase-current-${i}`} value={String(i)}>
+              {`Fase ${i + 1}${i === currentPhaseIndex ? ' (atual)' : ''}`}
+            </option>
+          ))}
+        </Select>
+      </Field>
 
       <ul className="phase-edit-list">
         {phases.map((p, i) => (

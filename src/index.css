@@ -493,15 +493,9 @@ input:focus-visible { outline: 3px solid rgba(32, 151, 137, .28); outline-offset
 .subscriber-data strong { font-size: 13px; }
 .subscriber-data span { color: var(--text-dim); font-size: 11px; }
 .subscriber-data small { margin-top: 3px; color: var(--brand); font-size: 10px; font-weight: 650; }
-<<<<<<< HEAD
-.subscriber-flags { display: flex; align-items: center; gap: 16px; }
-.flag-label { margin-left: 10px; color: var(--text-dim); font-size: 11px; }
-.access-switch { position: relative; display: inline-flex; align-items: center; }
-=======
 .subscriber-controls { display: flex; gap: 10px; }
 .subscriber-control { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-dim); font-size: 10px; font-weight: 650; }
 .access-switch { position: relative; display: inline-flex; }
->>>>>>> e0402f92057a06f87c12041e62154f19c7cbe5a6
 .access-switch input { position: absolute; opacity: 0; }
 .access-switch > span { width: 43px; height: 24px; border-radius: 999px; background: #bdc7c5; cursor: pointer; transition: background .15s; }
 .access-switch > span::after { content: ''; display: block; width: 18px; height: 18px; margin: 3px; border-radius: 50%; background: white; box-shadow: 0 1px 4px rgba(0,0,0,.22); transition: transform .15s; }
@@ -1232,3 +1226,12 @@ select.input {
   padding: 2px 8px;
   font-size: 11px;
 }
+.auth-check-health { padding: 10px; border: 1px solid var(--border, currentColor); border-radius: 10px; }
+.auth-legal-links { text-align: center; font-size: 12px; margin: 12px 0 0; color: var(--text-dim); }
+.auth-legal-links a { color: inherit; text-decoration: underline; }
+.legal-card h2 { font-size: 16px; margin: 18px 0 6px; text-align: left; }
+.legal-card ul { text-align: left; padding-left: 20px; margin: 6px 0; }
+.legal-card p, .legal-card li { text-align: left; }
+.legal-links { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; font-size: 13px; margin: 10px 0; }
+.legal-links a { color: inherit; text-decoration: underline; }
+.rights-card { display: grid; gap: 8px; margin-top: 14px; text-align: left; }

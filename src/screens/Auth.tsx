@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { authRedirectUrl, isSupabaseConfigured, supabase } from '../lib/supabase'
 import { friendlyAuthError, validateSignup } from '../lib/auth-validation'
+import { LEGAL_VERSION, legalHref } from '../lib/legal'
 
 type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery'
 
@@ -18,6 +19,7 @@ export function AuthScreen({
   const [confirmPassword, setConfirmPassword] = useState('')
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
+  const [healthConsent, setHealthConsent] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,7 +48,7 @@ export function AuthScreen({
       return
     }
     if (isSignup) {
-      const invalid = validateSignup({ password, confirmPassword, ageConfirmed, termsAccepted })
+      const invalid = validateSignup({ password, confirmPassword, ageConfirmed, termsAccepted, healthConsent })
       if (invalid) {
         setError(invalid)
         return
@@ -68,7 +70,14 @@ export function AuthScreen({
           email,
           password,
           options: {
-            data: { full_name: name.trim() },
+            data: {
+              full_name: name.trim(),
+              legal_version: LEGAL_VERSION,
+              terms_accepted: termsAccepted,
+              privacy_accepted: termsAccepted,
+              health_data_consent: healthConsent,
+              age_confirmed: ageConfirmed,
+            },
             emailRedirectTo: authRedirectUrl(),
           },
         })
@@ -190,6 +199,14 @@ export function AuthScreen({
                     <button type="button" className="auth-text-btn inline" onClick={() => onOpenLegal?.('termos')}>termos de uso</button>
                   </span>
                 </label>
+                <label className="auth-check auth-check-health">
+                  <input type="checkbox" checked={healthConsent} onChange={(event) => setHealthConsent(event.target.checked)} />
+                  <span>
+                    <strong>Autorizo o tratamento dos meus dados de saúde</strong> (medicamento, dose, peso, medidas e sintomas) para o
+                    Pesobic funcionar, conforme a política de privacidade. Sem esta autorização não é possível criar a conta. Posso
+                    revogar encerrando a conta em Config.
+                  </span>
+                </label>
               </div>
             )}
             {isLogin && <button type="button" className="auth-text-btn forgot-link" onClick={() => changeMode('forgot')}>Esqueci minha senha</button>}
@@ -200,6 +217,12 @@ export function AuthScreen({
               {busy ? 'Aguarde…' : isSignup ? 'Criar minha conta' : isForgot ? 'Enviar link de recuperação' : isRecovery ? 'Salvar nova senha' : 'Entrar'}
             </button>
           </form>
+
+          <p className="auth-legal-links">
+            <a href={legalHref('privacidade')} onClick={(event) => { event.preventDefault(); onOpenLegal?.('privacidade') }}>Política de privacidade</a>
+            {' · '}
+            <a href={legalHref('termos')} onClick={(event) => { event.preventDefault(); onOpenLegal?.('termos') }}>Termos de uso</a>
+          </p>
 
           <footer className="auth-switch">
             {isLogin && <>Ainda não tem conta? <button type="button" onClick={() => changeMode('signup')}>Criar cadastro</button></>}

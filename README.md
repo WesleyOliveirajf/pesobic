@@ -77,6 +77,12 @@ explicita no chat.**
 SMTP do Auth (confirmacao e recuperacao de e-mail) e requisito de producao. Nao
 configure o dashboard SMTP por acidente nesta barra.
 
+### Producao publica (LGPD)
+
+- SMTP do Auth e requisito de producao publica, assim como um e-mail de contato do titular.
+- `VITE_SUPPORT_EMAIL`: e-mail real do operador, exibido no app. Sem ele o app mostra um aviso de que o contato nao foi configurado. Nao inventar endereco.
+- `vercel.json` define `nosniff`, `Referrer-Policy`, `X-Frame-Options: DENY` e `Permissions-Policy`. CSP fica fora por enquanto (quebra PWA/Supabase com facilidade).
+
 ## Backup
 
 Config > Exportar backup (JSON). A conta na nuvem e a copia oficial; o export

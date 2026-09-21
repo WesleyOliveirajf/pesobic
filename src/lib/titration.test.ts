@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { TitrationPhase } from '../db/types'
-import { currentDoseMg, expectedPhaseIndex, phaseWindows } from './titration'
+import {
+  clampPhaseIndex,
+  currentDoseMg,
+  expectedPhaseIndex,
+  movePhaseIndex,
+  phaseWindows,
+} from './titration'
 
 const phases: TitrationPhase[] = [
   { id: 'phase-1', doseMg: 0.25, weeks: 4 },
@@ -33,5 +39,18 @@ describe('cronograma de titulação', () => {
     expect(
       currentDoseMg({ phases, currentPhaseIndex: 99 } as Parameters<typeof currentDoseMg>[0]),
     ).toBe(1)
+  })
+
+  it('mantém a fase atual dentro do intervalo válido quando o usuário escolhe manualmente', () => {
+    expect(clampPhaseIndex(99, phases.length)).toBe(2)
+    expect(clampPhaseIndex(-3, phases.length)).toBe(0)
+    expect(clampPhaseIndex(1, phases.length)).toBe(1)
+  })
+
+  it('permite reordenar fases para qualquer sequência desejada', () => {
+    const reordered = movePhaseIndex(phases, 2, -1)
+
+    expect(reordered.map((phase) => phase.doseMg)).toEqual([0.25, 1, 0.5])
+    expect(reordered.map((phase) => phase.id)).toEqual(['phase-1', 'phase-3', 'phase-2'])
   })
 })
