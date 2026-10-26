@@ -8,20 +8,20 @@
     const Injections = lazy(() => import('./screens/Injections').then((m) => ({ default: m.Injections })))
     const Weight = lazy(() => import('./screens/Weight').then((m) => ({ default: m.Weight })))
     const Symptoms = lazy(() => import('./screens/Symptoms').then((m) => ({ default: m.Symptoms })))
-    const Nutrition = lazy(() => import('./screens/Nutrition').then((m) => ({ default: m.Nutrition })))
+    const Workouts = lazy(() => import('./screens/Workouts').then((m) => ({ default: m.Workouts })))
     const SettingsScreen = lazy(() => import('./screens/Settings').then((m) => ({ default: m.SettingsScreen })))
     const AdminScreen = lazy(() => import('./screens/Admin').then((m) => ({ default: m.AdminScreen })))
     import { migrateLegacyToAccount, peekLegacyData, skipMigration, wasMigrated, type LegacyPeek } from './lib/legacy-migrate'
     import { Btn } from './components/ui'
 
-    type Tab = 'inicio' | 'caneta' | 'peso' | 'sintomas' | 'nutricao' | 'config' | 'admin'
+    type Tab = 'inicio' | 'caneta' | 'peso' | 'sintomas' | 'treino' | 'config' | 'admin'
 
     const TABS: { id: Tab; label: string; icon: string }[] = [
     { id: 'inicio', label: 'Início', icon: 'M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-6H9v6H5a2 2 0 0 1-2-2z' },
     { id: 'caneta', label: 'Caneta', icon: 'M4 20l4-1 10-10-3-3L5 16l-1 4zM15 5l3 3 2-2a2 2 0 0 0-3-3z' },
     { id: 'peso', label: 'Peso', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 4l3 5H9z' },
     { id: 'sintomas', label: 'Sintomas', icon: 'M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z' },
-    { id: 'nutricao', label: 'Nutrição', icon: 'M7 3v8a3 3 0 0 0 6 0V3M10 3v18M17 3c-1.5 0-3 2-3 6s1.5 5 3 5v7' },
+    { id: 'treino', label: 'Treino', icon: 'M4 8h4v8H4zM16 8h4v8h-4zM8 11h8v2H8z' },
     { id: 'config', label: 'Config', icon: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3 12h2m14 0h2M12 3v2m0 14v2' },
     { id: 'admin', label: 'Contas', icon: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8' },
     ]
@@ -29,12 +29,7 @@
     export default function App() {
     const settings = useSettings()
     const authProfile = useAuthProfile()
-    const hasNutritionAccess = authProfile.nutrition_enabled
-    const tabs = TABS.filter((item) => {
-        if (item.id === 'admin') return authProfile.is_admin
-        if (item.id === 'nutricao') return hasNutritionAccess
-        return true
-    })
+    const tabs = TABS.filter((item) => item.id !== 'admin' || authProfile.is_admin)
     const [tab, setTab] = useState<Tab>(() => {
         try {
         return (localStorage.getItem('pesobic:tab') as Tab) || 'inicio'
@@ -149,7 +144,7 @@
             {activeTab === 'caneta' && <Injections settings={settings} />}
             {activeTab === 'peso' && <Weight settings={settings} />}
             {activeTab === 'sintomas' && <Symptoms settings={settings} />}
-            {activeTab === 'nutricao' && hasNutritionAccess && <Nutrition settings={settings} />}
+            {activeTab === 'treino' && <Workouts />}
             {activeTab === 'config' && <SettingsScreen settings={settings} />}
             {activeTab === 'admin' && authProfile.is_admin && <AdminScreen />}
             </Suspense>

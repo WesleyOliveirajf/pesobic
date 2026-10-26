@@ -119,3 +119,12 @@ export interface NutritionDay {
   meals: number
   note?: string
 }
+
+export type WorkoutKind = 'musculacao' | 'cardio' | 'caminhada'
+
+export interface WorkoutDay {
+  id?: string
+  date: string // yyyy-mm-dd (chave unica)
+  kind: WorkoutKind
+  note?: string
+}

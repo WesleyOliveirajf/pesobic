@@ -4,7 +4,7 @@ import { supabase } from './supabase'
 import { asUuid } from './ids'
 import { errorMessage } from './errors'
 import type { AccessProfile } from './auth-context'
-import type { Injection, MedicationKey, NutritionDay, Settings, SymptomLog, TitrationPhase, WeighIn } from '../db/types'
+import type { Injection, MedicationKey, NutritionDay, Settings, SymptomLog, TitrationPhase, WeighIn, WorkoutDay } from '../db/types'
 
 function client() {
   if (!supabase) throw new Error('Supabase nao configurado.')
@@ -326,6 +326,72 @@ export async function deleteNutritionDay(id: string): Promise<void> {
   if (error) throw error
 }
 
+// ---------- workout_days ----------
+
+interface WorkoutDayRow {
+  id: string
+  tracked_on: string
+  kind: WorkoutDay['kind']
+  note: string | null
+}
+
+function fromWorkoutDayRow(row: WorkoutDayRow): WorkoutDay {
+  return {
+    id: row.id,
+    date: row.tracked_on,
+    kind: row.kind,
+    note: row.note ?? undefined,
+  }
+}
+
+const WORKOUT_COLUMNS = 'id,tracked_on,kind,note'
+
+function missingWorkoutTable(error: { message?: string } | null): boolean {
+  const message = error?.message ?? ''
+  return /workout_days/i.test(message) && /schema cache|does not exist|could not find/i.test(message)
+}
+
+export async function listWorkoutDays(userId: string): Promise<WorkoutDay[]> {
+  const { data, error } = await client()
+    .from('workout_days')
+    .select(WORKOUT_COLUMNS)
+    .eq('user_id', userId)
+    .order('tracked_on', { ascending: false })
+  if (error) {
+    if (missingWorkoutTable(error)) return []
+    throw error
+  }
+  return (data as WorkoutDayRow[]).map(fromWorkoutDayRow)
+}
+
+export async function upsertWorkoutDay(
+  userId: string,
+  date: string,
+  patch: Partial<Omit<WorkoutDay, 'id' | 'date'>>,
+  existing?: WorkoutDay,
+): Promise<WorkoutDay> {
+  const { data, error } = await client()
+    .from('workout_days')
+    .upsert(
+      {
+        user_id: userId,
+        tracked_on: date,
+        kind: patch.kind ?? existing?.kind ?? 'musculacao',
+        note: patch.note !== undefined ? (patch.note ?? null) : (existing?.note ?? null),
+      },
+      { onConflict: 'user_id,tracked_on' },
+    )
+    .select(WORKOUT_COLUMNS)
+    .single()
+  if (error) rethrow(error, 'write')
+  return fromWorkoutDayRow(data as WorkoutDayRow)
+}
+
+export async function deleteWorkoutDay(id: string): Promise<void> {
+  const { error } = await client().from('workout_days').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ---------- backup / wipe ----------
 
 export async function wipeAllForUser(userId: string): Promise<void> {
@@ -337,8 +403,9 @@ export async function wipeAllForUser(userId: string): Promise<void> {
       c.from('symptom_logs').delete().eq('user_id', userId),
       c.from('nutrition_days').delete().eq('user_id', userId),
       c.from('medication_plans').delete().eq('user_id', userId),
+      c.from('workout_days').delete().eq('user_id', userId),
     ])
-    const firstError = results.find((result) => result.error)?.error
+    const firstError = results.find((result) => result.error && !missingWorkoutTable(result.error))?.error
     if (firstError) throw firstError
   } catch (error) {
     rethrow(error, 'write')

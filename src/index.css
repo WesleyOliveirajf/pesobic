@@ -1238,3 +1238,57 @@ select.input {
 .legal-links { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; font-size: 13px; margin: 10px 0; }
 .legal-links a { color: inherit; text-decoration: underline; }
 .rights-card { display: grid; gap: 8px; margin-top: 14px; text-align: left; }
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.month-nav strong {
+  text-transform: capitalize;
+}
+.cal-nav {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+.cal-week,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-week {
+  margin-top: 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-align: center;
+}
+.cal-day {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--surface-2);
+  cursor: pointer;
+  font: inherit;
+}
+.cal-day.out {
+  opacity: 0.35;
+}
+.cal-day.on {
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-weight: 650;
+}
+.cal-day.today {
+  border-color: var(--brand);
+}
+.cal-day.selected {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}

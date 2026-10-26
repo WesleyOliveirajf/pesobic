@@ -6,6 +6,7 @@ import type {
   Settings,
   SymptomLog,
   WeighIn,
+  WorkoutDay,
 } from './types'
 
 const V1_STORES = {
@@ -24,6 +25,7 @@ export class PesobicDB extends Dexie {
   photos!: Table<PhotoEntry, number>
   symptoms!: Table<SymptomLog, string>
   nutrition!: Table<NutritionDay, string>
+  workouts!: Table<WorkoutDay, string>
 
   constructor(databaseName = 'pesobic:sem-usuario', legacy = false) {
     super(databaseName)
@@ -46,6 +48,15 @@ export class PesobicDB extends Dexie {
             tx.table('nutrition').clear(),
           ])
         })
+      this.version(3).stores({
+        settings: 'id',
+        injections: 'id, at, status',
+        weighIns: 'id, date, at',
+        photos: '++id, at, date',
+        symptoms: 'id, at, symptom',
+        nutrition: 'id, &date',
+        workouts: 'id, &date',
+      })
     }
   }
 }
@@ -101,7 +112,7 @@ export async function replaceCache<T extends { id?: string }>(
 export async function wipeAll(): Promise<void> {
   await db.transaction(
     'rw',
-    [db.settings, db.injections, db.weighIns, db.photos, db.symptoms, db.nutrition],
+    [db.settings, db.injections, db.weighIns, db.photos, db.symptoms, db.nutrition, db.workouts],
     async () => {
       await Promise.all([
         db.settings.clear(),
@@ -110,6 +121,7 @@ export async function wipeAll(): Promise<void> {
         db.photos.clear(),
         db.symptoms.clear(),
         db.nutrition.clear(),
+        db.workouts.clear(),
       ])
     },
   )

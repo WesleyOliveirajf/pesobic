@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AccessProfile } from '../lib/auth-context'
-import { listAdminDirectory, setUserBlocked, setUserNutritionEnabled } from '../lib/repo'
+import { listAdminDirectory, setUserBlocked } from '../lib/repo'
 import { fmtDateTime } from '../lib/format'
 
 export function AdminScreen() {
@@ -46,18 +46,6 @@ export function AdminScreen() {
     setChangingId(null)
   }
 
-  async function changeNutritionEnabled(person: AccessProfile, enabled: boolean) {
-    setChangingId(person.id)
-    setError(null)
-    try {
-      await setUserNutritionEnabled(person.id, enabled)
-      setPeople((current) => current.map((item) => item.id === person.id ? { ...item, nutrition_enabled: enabled } : item))
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Falha ao atualizar a Nutrição.')
-    }
-    setChangingId(null)
-  }
-
   const blockedCount = people.filter((person) => person.blocked && !person.is_admin).length
 
   return (
@@ -65,7 +53,7 @@ export function AdminScreen() {
       <header className="admin-head">
         <div>
           <h1>Contas</h1>
-          <p>Bloqueie abuso e habilite Nutrição por pessoa, sem acessar dados clínicos.</p>
+          <p>Bloqueie abuso, sem acessar dados clínicos.</p>
         </div>
         <button type="button" className="btn btn-plain" disabled={loading || refreshing} onClick={() => void loadPeople()}>
           {refreshing ? 'Atualizando…' : 'Atualizar'}
@@ -112,19 +100,6 @@ export function AdminScreen() {
                     <span aria-hidden="true" />
                   </span>
                   <em className="sr-only">{person.blocked ? 'Desbloquear' : 'Bloquear'} {person.full_name || person.email}</em>
-                </label>
-                <label className="subscriber-control">
-                  <span>Nutrição</span>
-                  <span className="access-switch">
-                    <input
-                      type="checkbox"
-                      checked={person.nutrition_enabled}
-                      disabled={changingId === person.id}
-                      onChange={(event) => void changeNutritionEnabled(person, event.target.checked)}
-                    />
-                    <span aria-hidden="true" />
-                  </span>
-                  <em className="sr-only">{person.nutrition_enabled ? 'Desabilitar Nutrição para' : 'Habilitar Nutrição para'} {person.full_name || person.email}</em>
                 </label>
               </div>
             </article>

@@ -16,4 +16,12 @@ describe('resolveSettings', () => {
   it('libera o onboarding apenas quando a consulta confirma que nao existe cadastro', () => {
     expect(resolveSettings(undefined, null)).toBeNull()
   })
+
+  it('depois do load, remote preenchido sobrescreve ausencia de cache', () => {
+    expect(resolveSettings(undefined, completedSettings)).toBe(completedSettings)
+  })
+
+  it('depois do persist (remote atualizado), ignora cache vazio e libera a home', () => {
+    expect(resolveSettings(null, completedSettings)).toBe(completedSettings)
+  })
 })

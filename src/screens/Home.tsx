@@ -1,6 +1,6 @@
-import type { Settings, WeighIn } from '../db/types'
+import type { Settings } from '../db/types'
 import { Card, EmptyState, ProgressBar, Stat } from '../components/ui'
-import { useInjections, useNutrition, useSymptoms, useWeighIns } from '../hooks'
+import { useInjections, useSymptoms, useWeighIns, useWorkouts } from '../hooks'
 import { medLabel, SEVERITY_LABEL, symptomLabel } from '../lib/domain'
 import { fmtDateTime, fmtRelativeDays, num, signed, todayISO } from '../lib/format'
 import {
@@ -8,15 +8,13 @@ import {
   latestWeight,
   nextDose,
   projectionWeeks,
-  proteinGoal,
   weeklyRateKg,
   weightStats,
 } from '../lib/metrics'
+import { countMarkedInMonth } from '../lib/workout-calendar'
 import { currentPhase, expectedPhaseIndex } from '../lib/titration'
-import { useAuthProfile } from '../lib/auth-context'
 
 export function Home({ settings, onGo }: { settings: Settings; onGo: (tab: string) => void }) {
-  const profile = useAuthProfile()
   const [injections] = useInjections()
   const [weighIns] = useWeighIns()
   const [symptoms] = useSymptoms()
@@ -120,7 +118,7 @@ export function Home({ settings, onGo }: { settings: Settings; onGo: (tab: strin
         </p>
       </Card>
 
-      {profile.nutrition_enabled && <NutritionSummary settings={settings} weighIns={weighIns} onGo={onGo} />}
+      <WorkoutSummary onGo={onGo} />
 
       <Card
         title="Ultimos sintomas"
@@ -149,34 +147,30 @@ export function Home({ settings, onGo }: { settings: Settings; onGo: (tab: strin
   )
 }
 
-function NutritionSummary({ settings, weighIns, onGo }: { settings: Settings; weighIns: WeighIn[]; onGo: (tab: string) => void }) {
-  const [nutrition] = useNutrition()
-  const todayNut = nutrition.find((n) => n.date === todayISO())
-  const pGoal = proteinGoal(latestWeight(weighIns, settings), settings)
+function WorkoutSummary({ onGo }: { onGo: (tab: string) => void }) {
+  const [workouts] = useWorkouts()
+  const now = new Date()
+  const monthCount = countMarkedInMonth(
+    workouts.map((row) => row.date),
+    now.getFullYear(),
+    now.getMonth(),
+  )
+  const todayMarked = workouts.some((row) => row.date === todayISO())
 
   return (
     <Card
-      title="Hoje"
+      title="Academia"
       right={
-        <button className="link" onClick={() => onGo('nutricao')}>
-          Nutrição &rsaquo;
+        <button className="link" onClick={() => onGo('treino')}>
+          Treino &rsaquo;
         </button>
       }
     >
       <div className="today-line">
-        <span>Proteína</span>
-        <strong>{todayNut?.proteinG ?? 0} / {pGoal} g</strong>
+        <span>Este mês</span>
+        <strong>{monthCount === 1 ? '1 dia' : `${monthCount} dias`}</strong>
       </div>
-      <ProgressBar pct={((todayNut?.proteinG ?? 0) / pGoal) * 100} />
-      <div className="today-line">
-        <span>Água</span>
-        <strong>{((todayNut?.waterMl ?? 0) / 1000).toFixed(1)} / {(settings.waterGoalMl / 1000).toFixed(1)} L</strong>
-      </div>
-      <ProgressBar pct={((todayNut?.waterMl ?? 0) / settings.waterGoalMl) * 100} tone="brand" />
-      <div className="today-line">
-        <span>Refeições</span>
-        <strong>{todayNut?.meals ?? 0}</strong>
-      </div>
+      <p className="muted-small">{todayMarked ? 'Hoje já está marcado.' : 'Hoje ainda não foi marcado.'}</p>
     </Card>
   )
 }

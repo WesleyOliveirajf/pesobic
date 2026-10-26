@@ -306,6 +306,17 @@ create table public.nutrition_days (
   unique (user_id, tracked_on)
 );
 
+create table public.workout_days (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  tracked_on date not null,
+  kind text not null default 'musculacao' check (kind in ('musculacao', 'cardio', 'caminhada')),
+  note text check (note is null or char_length(note) <= 2000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, tracked_on)
+);
+
 create table public.progress_photos (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -331,6 +342,7 @@ create index titration_phases_plan_id_user_id_idx on public.titration_phases (pl
 create index injections_user_id_occurred_at_idx on public.injections (user_id, occurred_at desc);
 create index weigh_ins_user_id_measured_on_idx on public.weigh_ins (user_id, measured_on desc);
 create index symptom_logs_user_id_occurred_at_idx on public.symptom_logs (user_id, occurred_at desc);
+create index workout_days_user_id_tracked_on_idx on public.workout_days (user_id, tracked_on desc);
 create index progress_photos_user_id_taken_on_idx on public.progress_photos (user_id, taken_on desc);
 
 create trigger profiles_set_updated_at
@@ -361,6 +373,10 @@ create trigger nutrition_days_set_updated_at
 before update on public.nutrition_days
 for each row execute function private.set_updated_at();
 
+create trigger workout_days_set_updated_at
+before update on public.workout_days
+for each row execute function private.set_updated_at();
+
 create trigger progress_photos_set_updated_at
 before update on public.progress_photos
 for each row execute function private.set_updated_at();
@@ -372,6 +388,7 @@ alter table public.injections enable row level security;
 alter table public.weigh_ins enable row level security;
 alter table public.symptom_logs enable row level security;
 alter table public.nutrition_days enable row level security;
+alter table public.workout_days enable row level security;
 alter table public.progress_photos enable row level security;
 
 revoke all on table
@@ -382,6 +399,7 @@ revoke all on table
   public.weigh_ins,
   public.symptom_logs,
   public.nutrition_days,
+  public.workout_days,
   public.progress_photos
 from anon, authenticated;
 
@@ -394,6 +412,7 @@ grant select, insert, update, delete on table
   public.weigh_ins,
   public.symptom_logs,
   public.nutrition_days,
+  public.workout_days,
   public.progress_photos
 to authenticated;
 
@@ -521,6 +540,23 @@ with check ((select private.has_nutrition_access()) and (select auth.uid()) = us
 create policy "nutrition_days_delete_own"
 on public.nutrition_days for delete to authenticated
 using ((select private.has_nutrition_access()) and (select auth.uid()) = user_id);
+
+create policy "workout_days_select_own"
+on public.workout_days for select to authenticated
+using ((select auth.uid()) = user_id);
+
+create policy "workout_days_insert_own"
+on public.workout_days for insert to authenticated
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
+
+create policy "workout_days_update_own"
+on public.workout_days for update to authenticated
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id)
+with check ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
+
+create policy "workout_days_delete_own"
+on public.workout_days for delete to authenticated
+using ((select private.is_not_blocked()) and (select auth.uid()) = user_id);
 
 create policy "progress_photos_select_own"
 on public.progress_photos for select to authenticated

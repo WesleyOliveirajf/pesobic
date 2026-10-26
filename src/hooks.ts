@@ -3,17 +3,28 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { cacheSettings, db, replaceCache } from './db/db'
 import { useAuthProfile } from './lib/auth-context'
 import * as repo from './lib/repo'
-import type { Injection, NutritionDay, Settings, SymptomLog, WeighIn } from './db/types'
+import type { Injection, Settings, SymptomLog, WeighIn, WorkoutDay } from './db/types'
 
 /**
  * Enquanto a conta e consultada, a ausencia do cache local nao significa que
  * o usuario ainda precisa concluir o onboarding.
+ *
+ * Depois da consulta: `remote` manda. Escrita via `persistSettings` atualiza
+ * `remote` pelos listeners para a UI sair do onboarding / refletir fases sem reload.
  */
 export function resolveSettings(
   cached: Settings | null | undefined,
   remote: Settings | null | undefined,
 ): Settings | null | undefined {
   return remote === undefined ? cached ?? undefined : remote
+}
+
+type SettingsListener = (settings: Settings) => void
+
+const settingsListeners = new Set<SettingsListener>()
+
+function notifySettingsPersisted(settings: Settings) {
+  for (const listener of settingsListeners) listener(settings)
 }
 
 export function useSettings() {
@@ -23,6 +34,7 @@ export function useSettings() {
 
   useEffect(() => {
     let active = true
+    setRemote(undefined)
     void (async () => {
       try {
         const settings = await repo.loadAccountSettings(profile.id)
@@ -30,6 +42,8 @@ export function useSettings() {
         if (settings) {
           const local = await db.settings.get('singleton')
           await cacheSettings({ ...settings, lastExportAt: local?.lastExportAt ?? null })
+        } else {
+          await db.settings.clear()
         }
         if (active) setRemote(settings)
       } catch {
@@ -43,6 +57,14 @@ export function useSettings() {
     }
   }, [profile.id])
 
+  useEffect(() => {
+    const onPersist: SettingsListener = (settings) => setRemote(settings)
+    settingsListeners.add(onPersist)
+    return () => {
+      settingsListeners.delete(onPersist)
+    }
+  }, [])
+
   return resolveSettings(cached, remote)
 }
 
@@ -51,6 +73,7 @@ export async function persistSettings(userId: string, next: Settings): Promise<S
   const local = await db.settings.get('singleton')
   const merged = { ...saved, lastExportAt: next.lastExportAt ?? local?.lastExportAt ?? null }
   await cacheSettings(merged)
+  notifySettingsPersisted(merged)
   return merged
 }
 
@@ -95,10 +118,10 @@ export function useSymptoms(): [SymptomLog[], () => Promise<void>] {
   return useSyncedEntity(repo.listSymptomLogs, cached, writeCache)
 }
 
-export function useNutrition(): [NutritionDay[], () => Promise<void>] {
-  const cached = useLiveQuery(() => db.nutrition.toArray(), []) ?? []
-  const writeCache = useCallback((rows: NutritionDay[]) => replaceCache(db.nutrition, rows), [])
-  return useSyncedEntity(repo.listNutritionDays, cached, writeCache)
+export function useWorkouts(): [WorkoutDay[], () => Promise<void>] {
+  const cached = useLiveQuery(() => db.workouts.toArray(), []) ?? []
+  const writeCache = useCallback((rows: WorkoutDay[]) => replaceCache(db.workouts, rows), [])
+  return useSyncedEntity(repo.listWorkoutDays, cached, writeCache)
 }
 
 export function usePhotos() {
