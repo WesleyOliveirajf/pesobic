@@ -13,9 +13,10 @@ import {
   NumberInput,
   TextInput,
 } from '../components/ui'
-import { usePhotos, useWeighIns } from '../hooks'
+import { useOnlineStatus, usePhotos, useWeighIns } from '../hooks'
 import { SimpleLineChart, WeightChart } from '../components/charts'
 import { exportPhotos, importPhotos } from '../lib/backup'
+import { formatMeasures, measureDeltas, validateMeasures } from '../lib/measures'
 import { fmtDate, fmtDateTime, num, signed, todayISO } from '../lib/format'
 import { latestWeight, weightSeries, weightStats } from '../lib/metrics'
 
@@ -29,6 +30,7 @@ const OPTIONAL_MEASURES: { key: keyof WeighIn; label: string }[] = [
 
 export function Weight({ settings }: { settings: Settings }) {
   const [weighIns, reloadWeighIns] = useWeighIns()
+  const online = useOnlineStatus()
   const [edit, setEdit] = useState<WeighIn | null>(null)
   const [showPhotos, setShowPhotos] = useState(false)
 
@@ -41,12 +43,18 @@ export function Weight({ settings }: { settings: Settings }) {
         .sort((a, b) => a.date.localeCompare(b.date)),
     [weighIns],
   )
+  const deltas = useMemo(() => measureDeltas(weighIns), [weighIns])
   const stats = weightStats(weighIns, settings)
   const current = latestWeight(weighIns, settings)
   const history = [...weighIns].sort((a, b) => b.at - a.at)
 
   return (
     <div className="screen">
+      {!online && (
+        <p className="error-box" role="status">
+          Sem conexão. Você está vendo os dados salvos no aparelho, e novas pesagens só podem ser registradas quando voltar a ficar online.
+        </p>
+      )}
       <QuickAdd onSaved={reloadWeighIns} />
 
       <Card title="Resumo">
@@ -69,6 +77,22 @@ export function Weight({ settings }: { settings: Settings }) {
       <Card title="Peso e media de 7 dias">
         <WeightChart data={series} goal={settings.goalWeightKg} />
       </Card>
+
+      {deltas.length > 0 && (
+        <Card title="Medidas (desde o primeiro registro)">
+          <ul className="log-list">
+            {deltas.map((d) => (
+              <li key={d.key}>
+                <span className="log-row">
+                  <span className="log-main">{d.label}</span>
+                  <span className="log-badge">{signed(d.deltaCm)} cm</span>
+                  <time>{num(d.firstCm)} → {num(d.lastCm)}</time>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {waistSeries.length >= 2 && (
         <Card title="Cintura">
@@ -99,8 +123,8 @@ export function Weight({ settings }: { settings: Settings }) {
                 <button className="log-row" onClick={() => setEdit(w)}>
                   <span className="log-badge">{num(w.weightKg)} kg</span>
                   <span className="log-main">
-                    {w.waistCm ? `cintura ${num(w.waistCm)} cm` : ''}
-                    {w.note ? `${w.waistCm ? ' — ' : ''}${w.note}` : ''}
+                    {formatMeasures(w)}
+                    {w.note ? `${formatMeasures(w) ? ' — ' : ''}${w.note}` : ''}
                   </span>
                   <time>{fmtDate(w.date)}</time>
                 </button>
@@ -129,7 +153,8 @@ function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
   const [weightKg, setWeightKg] = useState<number | null>(null)
   const [waistCm, setWaistCm] = useState<number | null>(null)
   const [note, setNote] = useState('')
-  const [more, setMore] = useState(false)
+  const [more, setMore] = useState(true)
+  const [ok, setOk] = useState(false)
   const [extra, setExtra] = useState<Record<string, number | null>>(emptyMeasures())
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -141,11 +166,11 @@ function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
 
   async function save() {
     setErr(null)
+    setOk(false)
     if (!weightKg || weightKg < 30 || weightKg > 400) {
       setErr('Informe um peso valido em kg.')
       return
     }
-    setBusy(true)
     const row: Omit<WeighIn, 'id'> = {
       date,
       at: date === todayISO() ? Date.now() : new Date(`${date}T12:00`).getTime(),
@@ -158,6 +183,12 @@ function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
       neckCm: extraValue('neckCm'),
       note: note.trim() || undefined,
     }
+    const invalid = validateMeasures(row)
+    if (invalid) {
+      setErr(invalid)
+      return
+    }
+    setBusy(true)
     try {
       await repo.addWeighIn(profile.id, row)
       await onSaved()
@@ -165,7 +196,7 @@ function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
       setWaistCm(null)
       setNote('')
       setExtra(emptyMeasures())
-      setMore(false)
+      setOk(true)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Falha ao salvar.')
     }
@@ -181,7 +212,7 @@ function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
         <Field label="Peso (kg)">
           <NumberInput value={weightKg} onValue={setWeightKg} placeholder="97.4" />
         </Field>
-        <Field label="Cintura (cm)">
+        <Field label="Cintura / abdômen (cm)">
           <NumberInput value={waistCm} onValue={setWaistCm} placeholder="opcional" />
         </Field>
         <Field label="Observacao">
@@ -203,6 +234,7 @@ function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
       )}
 
       {err && <p className="error-box">{err}</p>}
+      {ok && <p className="muted-small" role="status">Pesagem registrada.</p>}
       <div className="btn-row">
         <Btn variant="ghost" onClick={() => setMore((v) => !v)}>
           {more ? 'Menos campos' : 'Mais medidas'}
@@ -250,6 +282,11 @@ function EditWeighIn({
       neckCm: extra.neckCm ?? undefined,
       note: note.trim() || undefined,
     }
+    const invalid = validateMeasures(patch)
+    if (invalid) {
+      setErr(invalid)
+      return
+    }
     try {
       await repo.updateWeighIn(row.id!, patch)
       await onSaved()
@@ -268,7 +305,7 @@ function EditWeighIn({
         <Field label="Peso (kg)">
           <NumberInput value={weightKg} onValue={setWeightKg} />
         </Field>
-        <Field label="Cintura (cm)">
+        <Field label="Cintura / abdômen (cm)">
           <NumberInput value={waistCm} onValue={setWaistCm} />
         </Field>
         <Field label="Observacao">

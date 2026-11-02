@@ -77,6 +77,22 @@ export async function persistSettings(userId: string, next: Settings): Promise<S
   return merged
 }
 
+/** true quando o navegador acredita estar online; atualiza com os eventos online/offline. */
+export function useOnlineStatus(): boolean {
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
+  useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
+  return online
+}
+
 function useSyncedEntity<T extends { id?: string }>(
   fetcher: (userId: string) => Promise<T[]>,
   cached: T[],
