@@ -108,9 +108,29 @@ export function Weight({ settings }: { settings: Settings }) {
         </Card>
       )}
 
-      {waistSeries.length >= 2 && (
-        <Card title="Cintura">
-          <SimpleLineChart data={waistSeries} dataKey="cintura" unit="cm" color="var(--warn)" />
+      {waistSeries.length >= 1 && (
+        <Card title="Progressão da cintura / abdômen">
+          <div className="stat-row">
+            <div className="stat">
+              <span className="stat-value">{num(waistSeries[0].cintura)} cm</span>
+              <span className="stat-label">Inicial</span>
+            </div>
+            <div className="stat">
+              <span className="stat-value">{num(waistSeries[waistSeries.length - 1].cintura)} cm</span>
+              <span className="stat-label">Atual</span>
+            </div>
+            <div className="stat">
+              <span className="stat-value">
+                {signed(Math.round((waistSeries[waistSeries.length - 1].cintura - waistSeries[0].cintura) * 10) / 10)} cm
+              </span>
+              <span className="stat-label">Variação total</span>
+            </div>
+          </div>
+          {waistSeries.length >= 2 ? (
+            <SimpleLineChart data={waistSeries} dataKey="cintura" unit="cm" color="var(--warn)" label="Evolução da cintura" />
+          ) : (
+            <p className="muted-small">Registre outra medida para ver o gráfico de evolução.</p>
+          )}
         </Card>
       )}
 
