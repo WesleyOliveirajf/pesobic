@@ -66,3 +66,21 @@ export function measureDeltas(rows: (Pick<WeighIn, 'date' | MeasureKey>)[]): Mea
   }
   return out
 }
+
+export interface CurrentMeasure {
+  key: Exclude<MeasureKey, 'weightKg'>
+  label: string
+  cm: number
+  date: string
+}
+
+/** Último valor registrado de cada medida corporal (mesmo que em pesagens diferentes). */
+export function currentMeasures(rows: (Pick<WeighIn, 'date' | 'at' | MeasureKey>)[]): CurrentMeasure[] {
+  const sorted = [...rows].sort((a, b) => b.at - a.at)
+  const out: CurrentMeasure[] = []
+  for (const key of BODY_KEYS) {
+    const r = sorted.find((x) => typeof x[key] === 'number')
+    if (r) out.push({ key, label: MEASURE_SHORT_LABELS[key], cm: r[key] as number, date: r.date })
+  }
+  return out
+}

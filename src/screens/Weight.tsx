@@ -16,7 +16,7 @@ import {
 import { useOnlineStatus, usePhotos, useWeighIns } from '../hooks'
 import { SimpleLineChart, WeightChart } from '../components/charts'
 import { exportPhotos, importPhotos } from '../lib/backup'
-import { formatMeasures, measureDeltas, validateMeasures } from '../lib/measures'
+import { currentMeasures, formatMeasures, measureDeltas, validateMeasures } from '../lib/measures'
 import { fmtDate, fmtDateTime, num, signed, todayISO } from '../lib/format'
 import { latestWeight, weightSeries, weightStats } from '../lib/metrics'
 
@@ -44,6 +44,7 @@ export function Weight({ settings }: { settings: Settings }) {
     [weighIns],
   )
   const deltas = useMemo(() => measureDeltas(weighIns), [weighIns])
+  const measuresNow = useMemo(() => currentMeasures(weighIns), [weighIns])
   const stats = weightStats(weighIns, settings)
   const current = latestWeight(weighIns, settings)
   const history = [...weighIns].sort((a, b) => b.at - a.at)
@@ -55,7 +56,7 @@ export function Weight({ settings }: { settings: Settings }) {
           Sem conexão. Você está vendo os dados salvos no aparelho, e novas pesagens só podem ser registradas quando voltar a ficar online.
         </p>
       )}
-      <QuickAdd onSaved={reloadWeighIns} />
+      <QuickAdd onSaved={reloadWeighIns} fallbackWeightKg={current} />
 
       <Card title="Resumo">
         <div className="stat-row">
@@ -73,6 +74,19 @@ export function Weight({ settings }: { settings: Settings }) {
           </div>
         </div>
       </Card>
+
+      {measuresNow.length > 0 && (
+        <Card title="Medidas atuais">
+          <div className="stat-row">
+            {measuresNow.map((m) => (
+              <div className="stat" key={m.key}>
+                <span className="stat-value">{num(m.cm)} cm</span>
+                <span className="stat-label">{m.label}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card title="Peso e media de 7 dias">
         <WeightChart data={series} goal={settings.goalWeightKg} />
@@ -147,7 +161,7 @@ function emptyMeasures() {
   >
 }
 
-function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
+function QuickAdd({ onSaved, fallbackWeightKg }: { onSaved: () => Promise<void>; fallbackWeightKg: number }) {
   const profile = useAuthProfile()
   const [date, setDate] = useState(todayISO())
   const [weightKg, setWeightKg] = useState<number | null>(null)
@@ -167,14 +181,21 @@ function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
   async function save() {
     setErr(null)
     setOk(false)
-    if (!weightKg || weightKg < 30 || weightKg > 400) {
+    const hasMeasure =
+      (typeof waistCm === 'number' && !Number.isNaN(waistCm)) ||
+      Object.keys(extra).some((k) => extraValue(k) !== undefined)
+    if (!weightKg && !hasMeasure) {
+      setErr('Informe o peso ou ao menos uma medida.')
+      return
+    }
+    if (weightKg && (weightKg < 30 || weightKg > 400)) {
       setErr('Informe um peso valido em kg.')
       return
     }
     const row: Omit<WeighIn, 'id'> = {
       date,
       at: date === todayISO() ? Date.now() : new Date(`${date}T12:00`).getTime(),
-      weightKg,
+      weightKg: weightKg || fallbackWeightKg,
       waistCm: waistCm ?? undefined,
       hipCm: extraValue('hipCm'),
       armCm: extraValue('armCm'),
@@ -210,7 +231,7 @@ function QuickAdd({ onSaved }: { onSaved: () => Promise<void> }) {
           <TextInput type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
         </Field>
         <Field label="Peso (kg)">
-          <NumberInput value={weightKg} onValue={setWeightKg} placeholder="97.4" />
+          <NumberInput value={weightKg} onValue={setWeightKg} placeholder="opcional" />
         </Field>
         <Field label="Cintura / abdômen (cm)">
           <NumberInput value={waistCm} onValue={setWaistCm} placeholder="opcional" />
