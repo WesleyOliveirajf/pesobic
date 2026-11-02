@@ -170,19 +170,20 @@ export async function addWeighIn(userId: string, row: Omit<WeighIn, 'id'> & { id
 }
 
 export async function updateWeighIn(id: string, patch: Partial<Omit<WeighIn, 'id'>>): Promise<void> {
+  // Chave presente com valor undefined significa "limpar a medida" (grava null); chave ausente = nao mexer.
   const payload: Record<string, unknown> = {}
   if (patch.date !== undefined) payload.measured_on = patch.date
   if (patch.at !== undefined) payload.measured_at = new Date(patch.at).toISOString()
   if (patch.weightKg !== undefined) payload.weight_kg = patch.weightKg
-  if (patch.waistCm !== undefined) payload.waist_cm = patch.waistCm ?? null
-  if (patch.hipCm !== undefined) payload.hip_cm = patch.hipCm ?? null
-  if (patch.armCm !== undefined) payload.arm_cm = patch.armCm ?? null
-  if (patch.thighCm !== undefined) payload.thigh_cm = patch.thighCm ?? null
-  if (patch.chestCm !== undefined) payload.chest_cm = patch.chestCm ?? null
-  if (patch.neckCm !== undefined) payload.neck_cm = patch.neckCm ?? null
-  if (patch.note !== undefined) payload.note = patch.note ?? null
+  if ('waistCm' in patch) payload.waist_cm = patch.waistCm ?? null
+  if ('hipCm' in patch) payload.hip_cm = patch.hipCm ?? null
+  if ('armCm' in patch) payload.arm_cm = patch.armCm ?? null
+  if ('thighCm' in patch) payload.thigh_cm = patch.thighCm ?? null
+  if ('chestCm' in patch) payload.chest_cm = patch.chestCm ?? null
+  if ('neckCm' in patch) payload.neck_cm = patch.neckCm ?? null
+  if ('note' in patch) payload.note = patch.note ?? null
   const { error } = await client().from('weigh_ins').update(payload).eq('id', id)
-  if (error) throw error
+  if (error) rethrow(error, 'write')
 }
 
 export async function deleteWeighIn(id: string): Promise<void> {
